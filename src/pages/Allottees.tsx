@@ -1,5 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, ChevronLeft, ChevronRight, Phone, RefreshCw, UserCheck, MapPin, Hash } from 'lucide-react';
+import { 
+  Search, 
+  ChevronLeft, 
+  ChevronRight, 
+  Phone, 
+  RefreshCw, 
+  UserCheck, 
+  MapPin, 
+  Hash,
+  Users,
+  Building,
+  IdCard,
+  Layers,
+  ExternalLink
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface AllotteeItem {
@@ -16,6 +30,7 @@ interface AllotteeItem {
 const ITEMS_PER_PAGE = 30;
 
 export default function Allottees() {
+  const [activeTab, setActiveTab] = useState<'all' | 'lda' | 'contacts'>('all');
   const [allottees, setAllottees] = useState<AllotteeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -25,7 +40,6 @@ export default function Allottees() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // Supabase table "Allottees" se data fetch
       const { data, error } = await supabase
         .from('Allottees')
         .select('*')
@@ -34,15 +48,12 @@ export default function Allottees() {
       if (error) {
         console.error('Allottees load error:', error);
       } else if (data) {
-        // Automatic Deduplication logic (double entries hatane ke liye)
         const seenCodes = new Set<string>();
         const uniqueList: AllotteeItem[] = [];
 
         for (const item of data) {
           const rawCode = String(item['ID/Code'] || '').trim();
           const person = String(item['Contact Person / Owner'] || item['Contact Person / Owne'] || '').trim();
-          
-          // Agar ID/Code unique ho to duplicate filter karein
           const uniqueKey = rawCode ? rawCode : `${person}_${item.id}`;
 
           if (!seenCodes.has(uniqueKey)) {
@@ -73,7 +84,12 @@ export default function Allottees() {
     loadData();
   }, [loadData]);
 
-  // Unique society list dropdown filter ke liye
+  // Statistics Calculation
+  const totalCount = allottees.length;
+  const ldaCount = allottees.filter((a) => a.society_block.toLowerCase().includes('lda')).length;
+  const withPhoneCount = allottees.filter((a) => a.phone && a.phone !== '-').length;
+  const withCnicCount = allottees.filter((a) => a.cnic && a.cnic !== '-').length;
+
   const societies = Array.from(new Set(allottees.map((a) => a.society_block).filter(Boolean)));
 
   const filtered = allottees.filter((a) => {
@@ -82,10 +98,19 @@ export default function Allottees() {
       a.contact_person.toLowerCase().includes(q) ||
       a.id_code.toLowerCase().includes(q) ||
       a.phone.toLowerCase().includes(q) ||
-      a.cnic.toLowerCase().includes(q);
+      a.cnic.toLowerCase().includes(q) ||
+      a.society_block.toLowerCase().includes(q);
 
     const matchesSociety = selectedSociety === 'all' || a.society_block === selectedSociety;
-    return matchesSearch && matchesSociety;
+
+    let matchesTab = true;
+    if (activeTab === 'lda') {
+      matchesTab = a.society_block.toLowerCase().includes('lda');
+    } else if (activeTab === 'contacts') {
+      matchesTab = Boolean(a.phone && a.phone !== '-');
+    }
+
+    return matchesSearch && matchesSociety && matchesTab;
   });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
@@ -94,6 +119,116 @@ export default function Allottees() {
 
   return (
     <div className="space-y-6">
+      {/* 4 Stat Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Total Unique Records */}
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Verified Records</p>
+            <p className="mt-2 text-2xl font-bold text-slate-800 dark:text-slate-100">{totalCount}</p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
+            <Users className="h-5 w-5" />
+          </div>
+        </div>
+
+        {/* LDA Avenue 1 Records */}
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">LDA Avenue 1 Owners</p>
+            <p className="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{ldaCount}</p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+            <Building className="h-5 w-5" />
+          </div>
+        </div>
+
+        {/* Active Phone Contacts */}
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Direct Phone Numbers</p>
+            <p className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">{withPhoneCount}</p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500">
+            <Phone className="h-5 w-5" />
+          </div>
+        </div>
+
+        {/* Verified CNIC Records */}
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Verified CNIC Records</p>
+            <p className="mt-2 text-2xl font-bold text-purple-600 dark:text-purple-400">{withCnicCount}</p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-500/10 text-purple-500">
+            <IdCard className="h-5 w-5" />
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs Navigation */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2 dark:border-slate-800">
+        <button
+          onClick={() => {
+            setActiveTab('all');
+            setCurrentPage(1);
+          }}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+            activeTab === 'all'
+              ? 'border-amber-500 text-amber-500'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+          }`}
+        >
+          <Layers className="h-4 w-4" /> All Allottees
+          <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
+            {totalCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('lda');
+            setCurrentPage(1);
+          }}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+            activeTab === 'lda'
+              ? 'border-amber-500 text-amber-500'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+          }`}
+        >
+          <Building className="h-4 w-4" /> LDA Avenue 1
+          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-600 dark:text-emerald-400">
+            {ldaCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('contacts');
+            setCurrentPage(1);
+          }}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+            activeTab === 'contacts'
+              ? 'border-amber-500 text-amber-500'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+          }`}
+        >
+          <Phone className="h-4 w-4" /> With Contact Numbers
+          <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-xs text-blue-600 dark:text-blue-400">
+            {withPhoneCount}
+          </span>
+        </button>
+
+        <a
+          href="https://bintahaassociates.github.io/bintaha-main/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto flex items-center gap-1.5 text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400"
+        >
+          <ExternalLink className="h-3.5 w-3.5" /> Official Ecosystem
+        </a>
+      </div>
+
       {/* Top Filter and Search Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 flex-wrap items-center gap-3">
@@ -119,7 +254,7 @@ export default function Allottees() {
             }}
             className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-amber-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
           >
-            <option value="all">All Blocks / Societies</option>
+            <option value="all">تمام بلاکس و سوسائٹیز (All Blocks)</option>
             {societies.map((soc) => (
               <option key={soc} value={soc}>
                 {soc}
@@ -162,7 +297,7 @@ export default function Allottees() {
               ) : paginated.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-16 text-center text-sm text-slate-400">
-                    No allottees found matching your search.
+                    کوئی ریکارڈ نہیں ملا۔
                   </td>
                 </tr>
               ) : (
@@ -186,9 +321,21 @@ export default function Allottees() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300">
-                          <Phone className="h-3 w-3 text-slate-400" /> {a.phone}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="flex items-center gap-1 font-mono text-xs text-slate-600 dark:text-slate-300">
+                            <Phone className="h-3 w-3 text-slate-400" /> {a.phone}
+                          </span>
+                          {a.phone && a.phone !== '-' && (
+                            <a
+                              href={`https://wa.me/${a.phone.replace(/[^0-9]/g, '')}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-emerald-600"
+                            >
+                              WhatsApp
+                            </a>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className="flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
@@ -208,7 +355,7 @@ export default function Allottees() {
         {filtered.length > 0 && (
           <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 dark:border-slate-800">
             <p className="text-xs text-slate-400">
-              Total {filtered.length} Unique Records | Showing {(safePage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(safePage * ITEMS_PER_PAGE, filtered.length)}
+              کل {filtered.length} تصدیق شدہ ریکارڈز | دکھائے جا رہے ہیں {(safePage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(safePage * ITEMS_PER_PAGE, filtered.length)}
             </p>
             <div className="flex items-center gap-2">
               <button
