@@ -1,7 +1,27 @@
-import { LayoutDashboard, Building2, MapPin, Users, ReceiptText, HardHat, Moon, Sun, Crown, UserCog, Settings as SettingsIcon, Globe, ExternalLink, Calculator, Smartphone, Contact, Star, UserCircle } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  Building2, 
+  MapPin, 
+  Users, 
+  ReceiptText, 
+  HardHat, 
+  Moon, 
+  Sun, 
+  Crown, 
+  UserCog, 
+  Settings as SettingsIcon, 
+  Globe, 
+  ExternalLink, 
+  Calculator, 
+  Smartphone, 
+  Contact, 
+  Star, 
+  UserCircle, 
+  UserCheck 
+} from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 
-export type PageId = 'dashboard' | 'properties' | 'leads' | 'dealers' | 'bookings' | 'projects' | 'staff' | 'website' | 'settings';
+export type PageId = 'dashboard' | 'properties' | 'leads' | 'dealers' | 'allottees' | 'bookings' | 'projects' | 'staff' | 'website' | 'settings';
 
 interface SidebarProps {
   currentPage: PageId;
