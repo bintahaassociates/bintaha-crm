@@ -4,7 +4,6 @@ import {
   MapPin, 
   Users, 
   ReceiptText, 
-  HardHat, 
   Moon, 
   Sun, 
   Crown, 
@@ -17,11 +16,12 @@ import {
   Contact, 
   Star, 
   UserCircle, 
-  UserCheck 
+  UserCheck,
+  Wrench
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 
-export type PageId = 'dashboard' | 'properties' | 'leads' | 'dealers' | 'allottees' | 'bookings' | 'projects' | 'staff' | 'website' | 'settings';
+export type PageId = 'dashboard' | 'properties' | 'leads' | 'dealers' | 'allottees' | 'services' | 'bookings' | 'projects' | 'staff' | 'website' | 'settings';
 
 interface SidebarProps {
   currentPage: PageId;
@@ -34,6 +34,7 @@ const navItems: { id: PageId; label: string; icon: typeof LayoutDashboard }[] = 
   { id: 'leads', label: 'Leads Hub', icon: Users },
   { id: 'dealers', label: 'Dealers Directory', icon: UserCircle },
   { id: 'allottees', label: 'Allottees Directory', icon: UserCheck },
+  { id: 'services', label: 'Services Requests', icon: Wrench },
   { id: 'staff', label: 'Staff & Agents', icon: UserCog },
   { id: 'bookings', label: 'Bookings & Installments', icon: ReceiptText },
   { id: 'projects', label: 'Projects', icon: Building2 },
