@@ -1,0 +1,64 @@
+{
+  "name": "Bin Taha Associates CRM",
+  "short_name": "BTA CRM",
+  "description": "Real Estate CRM for Bin Taha Associates — manage properties, leads, bookings, staff, and website content.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0a0a",
+  "theme_color": "#d4af37",
+  "categories": ["business", "productivity", "finance"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "/?page=dashboard",
+      "description": "Business overview and stats"
+    },
+    {
+      "name": "Properties",
+      "short_name": "Properties",
+      "url": "/?page=properties",
+      "description": "Manage property inventory"
+    },
+    {
+      "name": "Leads",
+      "short_name": "Leads",
+      "url": "/?page=leads",
+      "description": "Track sales pipeline"
+    },
+    {
+      "name": "Website Management",
+      "short_name": "Website",
+      "url": "/?page=website",
+      "description": "Manage public website content"
+    }
+  ]
+}
