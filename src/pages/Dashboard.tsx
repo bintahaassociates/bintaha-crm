@@ -8,7 +8,6 @@ import {
   RefreshCw, 
   CheckCircle2, 
   Clock, 
-  AlertCircle, 
   Layers, 
   Briefcase, 
   ShieldCheck, 
@@ -19,24 +18,20 @@ import {
   PieChart as PieIcon,
   Activity,
   ArrowUpRight,
-  ExternalLink
+  ExternalLink,
+  Wallet,
+  Home,
+  UserPlus
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import BarChart from '@/components/charts/BarChart';
 import PieChart from '@/components/charts/PieChart';
 
-interface PropertyStat {
-  priceRaw: number;
-  status: string;
-  society: string;
-  type: string;
-}
-
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'financials' | 'inventory_movement' | 'staff_ops' | 'ecosystem'>('financials');
   const [loading, setLoading] = useState(true);
 
-  // Business Analytics Stats
+  // Business Analytics & Owner Stats
   const [stats, setStats] = useState({
     totalInventoryWorth: 0,
     soldPortfolioWorth: 0,
@@ -46,7 +41,7 @@ export default function Dashboard() {
     soldCount: 0,
     bookedCount: 0,
     totalEmployees: 6,
-    activeStaffOnDeals: 4,
+    activeStaffOnDeals: 5,
     totalDealers: 0,
     totalAllottees: 0,
     totalServices: 0,
@@ -57,7 +52,7 @@ export default function Dashboard() {
   const [statusChartData, setStatusChartData] = useState<{ label: string; value: number; color: string }[]>([]);
   const [recentMovements, setRecentMovements] = useState<any[]>([]);
 
-  // Format Large Currency to Pakistani Crores / Lacs
+  // Format Large Values to Pakistani Rupees (Crores / Lacs)
   function formatPKR(val: number): string {
     if (!val || isNaN(val)) return 'Rs 0';
     if (val >= 10000000) {
@@ -69,7 +64,7 @@ export default function Dashboard() {
     return `Rs ${val.toLocaleString()}`;
   }
 
-  // Parse dirty Pakistani price strings (e.g. "51629500000", "2.5 cr", "17500000", "4458851")
+  // Parse Pakistani currency and price strings cleanly
   function parsePrice(raw: any): number {
     if (!raw) return 0;
     const str = String(raw).toLowerCase().replace(/,/g, '').trim();
@@ -79,7 +74,7 @@ export default function Dashboard() {
 
     if (str.includes('crore') || str.includes('cr')) return base * 10000000;
     if (str.includes('lac') || str.includes('lakh')) return base * 100000;
-    if (base > 0 && base < 1000) return base * 100000; // rough normalized format if abbreviated
+    if (base > 0 && base < 1000) return base * 100000;
     return isNaN(base) ? 0 : base;
   }
 
@@ -114,7 +109,6 @@ export default function Dashboard() {
           const st = String(p.status || 'available').toLowerCase();
           const soc = p.Society ? String(p.Society).trim() : 'Other Society';
 
-          // Accumulate society distribution
           societyMap[soc] = (societyMap[soc] || 0) + 1;
 
           if (st === 'sold') {
@@ -134,8 +128,8 @@ export default function Dashboard() {
       const srvList = servicesRes.data || [];
       const pendingSrv = srvList.filter((s: any) => String(s.Status).toLowerCase() === 'pending').length;
 
-      // Project portfolio estimated (LDA, Commercials, etc.)
-      const projWorth = totalWorth > 0 ? totalWorth * 0.45 : 350000000;
+      // Project portfolio calculation
+      const projWorth = totalWorth > 0 ? totalWorth * 0.40 : 350000000;
 
       setStats({
         totalInventoryWorth: totalWorth,
@@ -153,18 +147,18 @@ export default function Dashboard() {
         pendingServices: pendingSrv,
       });
 
-      // Prepare Society Bar Chart Data
+      // Societies Volume Graph
       const sortedSocieties = Object.entries(societyMap)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 6)
         .map(([label, value]) => ({ label, value }));
       setSocietyBreakdown(sortedSocieties);
 
-      // Status Pie Breakdown
+      // Status Movement Pie Graph
       setStatusChartData([
         { label: 'Available Inventory', value: availCount || 75, color: '#f59e0b' },
         { label: 'Sold Deals', value: sCount || 15, color: '#10b981' },
-        { label: 'Under Booking', value: bCount || 10, color: '#3b82f6' },
+        { label: 'Booked / In Escrow', value: bCount || 10, color: '#3b82f6' },
       ]);
 
       setRecentMovements(leadsRes.data || []);
@@ -181,32 +175,32 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* 4 Financial & Asset Power Cards */}
+      {/* 4 Financial & Movement Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Total Inventory Value */}
         <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-white via-white to-amber-50/40 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              مجموعی انوینٹری مالیت (Total Worth)
+              Total Inventory Worth
             </p>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
-              <DollarSign className="h-5 w-5" />
+              <Wallet className="h-5 w-5" />
             </div>
           </div>
           <p className="mt-3 text-2xl font-black text-amber-600 dark:text-amber-400">
             {loading ? '...' : formatPKR(stats.totalInventoryWorth)}
           </p>
           <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-            <span>کل پراپرٹیز: <b>{stats.totalPropertiesCount.toLocaleString()}</b></span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Active Assets</span>
+            <span>Total Units: <b>{stats.totalPropertiesCount.toLocaleString()}</b></span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Active Inventory</span>
           </div>
         </div>
 
-        {/* Sold Portfolio Worth */}
+        {/* Sold Portfolio Value */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              فروخت شدہ پورٹ فولیو (Sold Value)
+              Sold Deals Valuation
             </p>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
               <CheckCircle2 className="h-5 w-5" />
@@ -216,16 +210,16 @@ export default function Dashboard() {
             {loading ? '...' : formatPKR(stats.soldPortfolioWorth)}
           </p>
           <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-            <span>کامیاب ڈیلز: <b>{stats.soldCount}</b></span>
+            <span>Closed Deals: <b>{stats.soldCount} Units</b></span>
             <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Realized Capital</span>
           </div>
         </div>
 
-        {/* Active Projects Worth */}
+        {/* Ongoing Projects Worth */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              پراجیکٹس اور ڈویلپمنٹ والیم
+              Project Development Value
             </p>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500">
               <Building2 className="h-5 w-5" />
@@ -235,26 +229,26 @@ export default function Dashboard() {
             {loading ? '...' : formatPKR(stats.projectPortfolioWorth)}
           </p>
           <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-            <span>LDA / Commercial Scope</span>
-            <span className="text-blue-600 dark:text-blue-400 font-semibold">Ongoing Worth</span>
+            <span>LDA & Commercial Scope</span>
+            <span className="text-blue-600 dark:text-blue-400 font-semibold">Asset Pipeline</span>
           </div>
         </div>
 
-        {/* Employees & Field Staff Deployments */}
+        {/* Staff & Field Deployments */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              عملہ اور ایجنٹس (Active Staff)
+              Staff & Field Agents
             </p>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-500">
               <Users className="h-5 w-5" />
             </div>
           </div>
           <p className="mt-3 text-2xl font-black text-purple-600 dark:text-purple-400">
-            {stats.activeStaffOnDeals} / {stats.totalEmployees}
+            {stats.activeStaffOnDeals} / {stats.totalEmployees} Active
           </p>
           <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-            <span>آن فیلڈ ڈیلز پر تعینات</span>
+            <span>Assigned on Site Deals</span>
             <span className="text-purple-600 dark:text-purple-400 font-semibold">Operational</span>
           </div>
         </div>
@@ -270,7 +264,7 @@ export default function Dashboard() {
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
           }`}
         >
-          <BarChart3 className="h-4 w-4" /> مالیت اور گرافیکل تجزئیہ (Financials & Graphs)
+          <BarChart3 className="h-4 w-4" /> Financials & Analytics
         </button>
 
         <button
@@ -281,7 +275,7 @@ export default function Dashboard() {
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
           }`}
         >
-          <Activity className="h-4 w-4" /> انوینٹری موومنٹ (Available vs Sold Pipeline)
+          <Activity className="h-4 w-4" /> Inventory Movement (Sold vs Remaining)
         </button>
 
         <button
@@ -292,7 +286,7 @@ export default function Dashboard() {
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
           }`}
         >
-          <Briefcase className="h-4 w-4" /> اسٹاف تفویض و کارکردگی (Staff on Properties)
+          <Briefcase className="h-4 w-4" /> Staff Deployment on Properties
         </button>
 
         <button
@@ -303,7 +297,7 @@ export default function Dashboard() {
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
           }`}
         >
-          <Layers className="h-4 w-4" /> مکمل ایکوسسٹم لنکس
+          <Layers className="h-4 w-4" /> Connected Ecosystem Hubs
         </button>
 
         <button
@@ -311,46 +305,46 @@ export default function Dashboard() {
           title="Reload Dashboard"
           className="ml-auto flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> لائیو ریفریش
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh Metrics
         </button>
       </div>
 
-      {/* TAB 1: FINANCIALS & GRAPHS */}
+      {/* TAB 1: FINANCIALS & DETAILED GRAPHS */}
       {activeTab === 'financials' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            {/* Society Value Distribution Bar Chart */}
+            {/* Society Inventory Volume Bar Chart */}
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:col-span-2">
               <div className="mb-6 flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">سوسائٹی وائز پراپرٹیز والیم و تقسیم</h3>
-                  <p className="text-xs text-slate-400">LDA Avenue 1, DHA Lahore, Jubilee Town اور دیگر بلاکس کی گنتی</p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Societies Volume & Inventory Distribution</h3>
+                  <p className="text-xs text-slate-400">LDA Avenue 1, DHA Lahore, Jubilee Town, and key sector listings</p>
                 </div>
                 <span className="rounded-md bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-600 dark:text-amber-400">
-                  حجم کا گراف
+                  Volume Analysis
                 </span>
               </div>
               <BarChart data={societyBreakdown} />
             </div>
 
-            {/* Inventory Status Breakdown Pie */}
+            {/* Inventory Status Breakdown Pie Chart */}
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="mb-6">
-                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">انوینٹری اسٹیٹس پائی چارٹ</h3>
-                <p className="text-xs text-slate-400">دستیاب، بکڈ اور بیچی گئی پراپرٹیز کا تناسب</p>
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Inventory Status Ratio</h3>
+                <p className="text-xs text-slate-400">Available listings vs closed sales and reservations</p>
               </div>
               <PieChart data={statusChartData} />
               <div className="mt-6 grid grid-cols-3 gap-2 border-t border-slate-100 pt-4 text-center dark:border-slate-800">
                 <div>
-                  <p className="text-[11px] text-slate-400">دستیاب</p>
+                  <p className="text-[11px] text-slate-400">Available</p>
                   <p className="text-base font-bold text-amber-600 dark:text-amber-400">{stats.availableCount}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-slate-400">فروخت شدہ</p>
+                  <p className="text-[11px] text-slate-400">Sold</p>
                   <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">{stats.soldCount}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-slate-400">بکڈ</p>
+                  <p className="text-[11px] text-slate-400">Booked</p>
                   <p className="text-base font-bold text-blue-600 dark:text-blue-400">{stats.bookedCount}</p>
                 </div>
               </div>
@@ -359,20 +353,20 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* TAB 2: INVENTORY MOVEMENT (What's Sold, What's Left) */}
+      {/* TAB 2: INVENTORY MOVEMENT (What's Sold vs What's Left) */}
       {activeTab === 'inventory_movement' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            {/* Left Card: Inventory Progress */}
+            {/* Stock Situation Progress */}
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <h3 className="font-bold text-slate-900 dark:text-slate-100">انوینٹری اسٹاک کی لائیو صورتحال</h3>
-              <p className="text-xs text-slate-400 mt-1">مالک کے کنٹرول میں موجود کل اسٹاک کی تفصیل</p>
+              <h3 className="font-bold text-slate-900 dark:text-slate-100">Real-Time Stock Pipeline</h3>
+              <p className="text-xs text-slate-400 mt-1">Live ratio of unsold available assets vs closed contracts</p>
 
               <div className="mt-5 space-y-4">
                 <div>
                   <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-amber-600">دستیاب پراپرٹیز (Available)</span>
-                    <span>{stats.availableCount}</span>
+                    <span className="text-amber-600">Remaining Inventory (Available)</span>
+                    <span>{stats.availableCount} Units</span>
                   </div>
                   <div className="mt-1.5 h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800">
                     <div 
@@ -384,8 +378,8 @@ export default function Dashboard() {
 
                 <div>
                   <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-emerald-600">فروخت شدہ پراپرٹیز (Sold Deals)</span>
-                    <span>{stats.soldCount}</span>
+                    <span className="text-emerald-600">Closed Sales (Sold Portfolio)</span>
+                    <span>{stats.soldCount} Units</span>
                   </div>
                   <div className="mt-1.5 h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800">
                     <div 
@@ -397,8 +391,8 @@ export default function Dashboard() {
 
                 <div>
                   <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-blue-600">بکڈ اور بیانہ شدہ (Booked)</span>
-                    <span>{stats.bookedCount}</span>
+                    <span className="text-blue-600">Under Contract / Token Booked</span>
+                    <span>{stats.bookedCount} Units</span>
                   </div>
                   <div className="mt-1.5 h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800">
                     <div 
@@ -410,20 +404,20 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Right Table: Recent Movements */}
+            {/* Recent Movement Inquiries Stream */}
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:col-span-2">
-              <h3 className="font-bold text-slate-900 dark:text-slate-100">حالیہ مارکیٹ موومنٹ اور کلائنٹ انٹیک</h3>
-              <p className="text-xs text-slate-400 mt-1">ڈیجیٹل کارڈ اور ویب سے تازہ ترین آنے والی انکوائریز</p>
+              <h3 className="font-bold text-slate-900 dark:text-slate-100">Live Client Demand & Direct Leads</h3>
+              <p className="text-xs text-slate-400 mt-1">Direct inquiries received from NFC digital card and main website portal</p>
 
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/50">
                     <tr className="font-semibold text-slate-500">
-                      <th className="py-2.5 px-3">کلائنٹ / لیڈ</th>
-                      <th className="py-2.5 px-3">رابطہ</th>
-                      <th className="py-2.5 px-3">ڈیمانڈ سروس</th>
-                      <th className="py-2.5 px-3">بجٹ</th>
-                      <th className="py-2.5 px-3">ایکشن</th>
+                      <th className="py-2.5 px-3">Client Name</th>
+                      <th className="py-2.5 px-3">Contact</th>
+                      <th className="py-2.5 px-3">Demand Service</th>
+                      <th className="py-2.5 px-3">Budget</th>
+                      <th className="py-2.5 px-3">Direct Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -455,56 +449,56 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* TAB 3: STAFF & AGENTS ACTIVITY (Who is working on what) */}
+      {/* TAB 3: STAFF & EMPLOYEES ON PROPERTIES */}
       {activeTab === 'staff_ops' && (
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="font-bold text-slate-900 dark:text-slate-100">عملے کی پراپرٹی وائز تفویض اور کارکردگی</h3>
-                <p className="text-xs text-slate-400">کون سا ایجنٹ کن پراپرٹیز اور ڈیلز کی نگرانی کر رہا ہے</p>
+                <h3 className="font-bold text-slate-900 dark:text-slate-100">Staff Deployment & Property Allocation</h3>
+                <p className="text-xs text-slate-400">Track which agent is actively managing specific inventory units and deals</p>
               </div>
               <span className="rounded-md bg-purple-500/10 px-3 py-1 text-xs font-bold text-purple-600 dark:text-purple-400">
-                Staff Deployment Tracker
+                Staff Deployment Matrix
               </span>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {/* Agent 1 */}
+              {/* Director / Key Deals */}
               <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 dark:text-slate-100">طاہا مبین (Lead Director)</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">Taha Mobeen (Managing Director)</span>
                   <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Active</span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">LDA Avenue 1 & Commercial Closures</p>
+                <p className="text-xs text-slate-400 mt-1">LDA Avenue 1 Prime Files & Commercial Deal Closures</p>
                 <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs flex justify-between">
-                  <span>زیرِ نگرانی ڈیلز: <b>18 پراپرٹیز</b></span>
-                  <span className="text-amber-600 font-semibold">Priority Lead</span>
+                  <span>Assigned Deals: <b>18 High-Value Units</b></span>
+                  <span className="text-amber-600 font-semibold">Priority</span>
                 </div>
               </div>
 
-              {/* Agent 2 */}
+              {/* Field Officer 1 */}
               <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 dark:text-slate-100">فیلڈ ایجنٹ - LDA سیکٹر</span>
-                  <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">On Field</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">Field Operations Specialist</span>
+                  <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">On Site</span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">بلاک A، B اور C میں پلاٹ کے معائنے</p>
+                <p className="text-xs text-slate-400 mt-1">Block A, B, C On-Site Plot Verification & Client Meetings</p>
                 <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs flex justify-between">
-                  <span>زیرِ نگرانی ڈیلز: <b>24 پراپرٹیز</b></span>
-                  <span className="text-blue-600 font-semibold">Inspections</span>
+                  <span>Assigned Deals: <b>24 Properties</b></span>
+                  <span className="text-blue-600 font-semibold">Field Inspections</span>
                 </div>
               </div>
 
-              {/* Agent 3 */}
+              {/* Construction Incharge */}
               <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 dark:text-slate-100">کنسٹرکشن و سروسز انچارج</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">Construction & Approvals Manager</span>
                   <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Operations</span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">گرے اسٹرکچر اور میپ اپروول پروجیکٹس</p>
+                <p className="text-xs text-slate-400 mt-1">Gray Structure Progress, Town Planning & Map Approvals</p>
                 <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs flex justify-between">
-                  <span>جاری سروسز: <b>{stats.pendingServices} ورک آرڈرز</b></span>
+                  <span>Work Orders: <b>{stats.pendingServices} In Progress</b></span>
                   <span className="text-amber-600 font-semibold">On Site</span>
                 </div>
               </div>
@@ -524,7 +518,7 @@ export default function Dashboard() {
           >
             <Building2 className="h-6 w-6 text-amber-500" />
             <h4 className="mt-3 font-bold text-slate-800 dark:text-slate-100">Main Web Portal</h4>
-            <p className="mt-1 text-xs text-slate-400">Public listings, property calculators & inquiries</p>
+            <p className="mt-1 text-xs text-slate-400">Public listings, property estimators & direct inquiries</p>
           </a>
 
           <a
@@ -535,7 +529,7 @@ export default function Dashboard() {
           >
             <Users className="h-6 w-6 text-emerald-500" />
             <h4 className="mt-3 font-bold text-slate-800 dark:text-slate-100">Digital Business Card</h4>
-            <p className="mt-1 text-xs text-slate-400">NFC Profile & incoming client capture</p>
+            <p className="mt-1 text-xs text-slate-400">NFC client leads intake & profile visits</p>
           </a>
 
           <a
@@ -546,7 +540,7 @@ export default function Dashboard() {
           >
             <DollarSign className="h-6 w-6 text-blue-500" />
             <h4 className="mt-3 font-bold text-slate-800 dark:text-slate-100">Accounting ERP</h4>
-            <p className="mt-1 text-xs text-slate-400">Ledgers, company accounts & expense records</p>
+            <p className="mt-1 text-xs text-slate-400">Company ledger, balance sheet & cash flow</p>
           </a>
 
           <a
@@ -557,7 +551,7 @@ export default function Dashboard() {
           >
             <Activity className="h-6 w-6 text-purple-500" />
             <h4 className="mt-3 font-bold text-slate-800 dark:text-slate-100">Bin Taha Mobile App</h4>
-            <p className="mt-1 text-xs text-slate-400">Mobile client app & field agents access</p>
+            <p className="mt-1 text-xs text-slate-400">Client app & field staff mobile operations</p>
           </a>
         </div>
       )}
