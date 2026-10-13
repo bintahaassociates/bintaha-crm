@@ -11,7 +11,6 @@ interface PropertyItem {
   price: string;
   phone: string;
   description: string;
-  // Private CRM Fields
   original_dealer_name?: string;
   original_dealer_phone?: string;
   full_description?: string;
@@ -30,51 +29,66 @@ export default function Properties() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. private_crm کا تمام ڈیٹا (پوری 1,367+ روز) لانا
-      const [propsRes, privateRes] = await Promise.all([
-        supabase
-          .from('properties')
-          .select('*')
-          .order('id', { ascending: false })
-          .range(0, 4000),
-        supabase
-          .from('private_crm')
-          .select('*')
-          .range(0, 4000),
-      ]);
+      // 1. Properties ٹیبل سے ڈیٹا حاصل کریں
+      const propsRes = await supabase
+        .from('properties')
+        .select('*')
+        .order('id', { ascending: false });
 
-      // میچنگ کے لیے دو میپس: ایک ID سے اور ایک Title سے
-      const privateById = new Map<string, any>();
-      const privateByTitle = new Map<string, any>();
+      // 2. Private CRM ٹیبل سے ڈیٹا حاصل کریں
+      const privRes = await supabase
+        .from('private_crm')
+        .select('*');
 
-      if (privateRes.data) {
-        for (const row of privateRes.data) {
-          const idKey = String(row.ID || row.id || '').trim();
-          const titleKey = String(row.Title || row.title || '').trim().toLowerCase();
+      console.log('Props count:', propsRes.data?.length);
+      console.log('Private count:', privRes.data?.length);
 
-          if (idKey) privateById.set(idKey, row);
-          if (titleKey) privateByTitle.set(titleKey, row);
+      // Private CRM کا آسان میپ بنائیں
+      const privateMap = new Map<string, any>();
+      if (privRes.data) {
+        for (const item of privRes.data) {
+          // ID کو ہر ممکن طریقے سے کی (Key) بنائیں
+          const rawId = String(item.ID ?? item.id ?? '').trim();
+          const cleanTitle = String(item.Title ?? item.title ?? '').trim().toLowerCase();
+          
+          if (rawId) privateMap.set(rawId, item);
+          if (cleanTitle) privateMap.set(cleanTitle, item);
         }
       }
 
       if (propsRes.data) {
         const mapped: PropertyItem[] = propsRes.data.map((p: any) => {
-          const pId = String(p.ID || p.id || '').trim();
-          const pTitle = String(p.Title || p.title || '').trim().toLowerCase();
+          const pId = String(p.ID ?? p.id ?? '').trim();
+          const pTitle = String(p.Title ?? p.title ?? '').trim().toLowerCase();
 
-          // پہلے ID سے ملائیں، نہ ملے تو Title سے ملائیں
-          const priv = privateById.get(pId) || privateByTitle.get(pTitle);
+          // پہلے ID سے تلاش کریں، نہ ملے تو Title سے
+          const priv = privateMap.get(pId) || privateMap.get(pTitle) || {};
 
-          // پرائیویٹ CRM کے کالمز
-          const origName = priv
-            ? priv['Original Dealer Name'] || priv['Original Dealer'] || priv['Original De'] || priv.original_dealer_name
-            : '';
-          const origPhone = priv
-            ? priv['Original Dealer Phone'] || priv['Original Phone'] || priv['Original De'] || priv.original_dealer_phone
-            : '';
-          const fullDesc = priv
-            ? priv['Full Description'] || priv['Full Descri'] || priv.full_description
-            : '';
+          // نام، فون اور میسج تمام ممکنہ کالمز سے نکالیں
+          const origName = 
+            priv['Original Dealer Name'] || 
+            priv['Original Dealer'] || 
+            priv['Original De'] || 
+            p['Original Dealer Name'] || 
+            p['original_dealer_name'] || 
+            '';
+
+          const origPhone = 
+            priv['Original Dealer Phone'] || 
+            priv['Original Phone'] || 
+            priv['Original De'] || 
+            p['Original Dealer Phone'] || 
+            p['original_dealer_phone'] || 
+            '';
+
+          const fullMsg = 
+            priv['Full Description'] || 
+            priv['Full Descri'] || 
+            priv['description'] || 
+            p['Full Description'] || 
+            p['Description'] || 
+            p['description'] || 
+            '';
 
           return {
             id: p.id,
@@ -85,16 +99,16 @@ export default function Properties() {
             price: p.Price || p.price || '-',
             phone: p.Phone || p.phone || '-',
             description: p.Description || p.description || '',
-            original_dealer_name: origName || undefined,
-            original_dealer_phone: origPhone || undefined,
-            full_description: fullDesc || undefined,
+            original_dealer_name: origName.trim() || undefined,
+            original_dealer_phone: origPhone.trim() || undefined,
+            full_description: fullMsg.trim() || undefined,
           };
         });
 
         setProperties(mapped);
       }
     } catch (err) {
-      console.error('Failed to load combined properties:', err);
+      console.error('Error fetching properties or private_crm:', err);
     } finally {
       setLoading(false);
     }
@@ -134,7 +148,7 @@ export default function Properties() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search title, society, private owner, phone, or msg..."
+              placeholder="Search title, society, private owner, or full msg..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -162,7 +176,7 @@ export default function Properties() {
 
           <button
             onClick={loadData}
-            title="Reload Data"
+            title="Reload Properties & Private Msg"
             className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -182,7 +196,7 @@ export default function Properties() {
                 <th className="px-4 py-3">Society</th>
                 <th className="px-4 py-3">Price</th>
                 <th className="px-4 py-3">Display Contact</th>
-                <th className="px-4 py-3 text-center">Private CRM</th>
+                <th className="px-4 py-3 text-center">Private CRM Data</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -190,13 +204,13 @@ export default function Properties() {
                 <tr>
                   <td colSpan={7} className="py-16 text-center">
                     <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-amber-500" />
-                    <p className="mt-2 text-xs text-slate-400">تمام پراپرٹیز اور اصل پرائیویٹ میسجز لوڈ ہو رہے ہیں...</p>
+                    <p className="mt-2 text-xs text-slate-400">Loading Properties & Matching Private CRM Messages...</p>
                   </td>
                 </tr>
               ) : paginated.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-16 text-center text-sm text-slate-400">
-                    کوئی ریکارڈ نہیں ملا۔
+                    No properties found.
                   </td>
                 </tr>
               ) : (
