@@ -1,351 +1,341 @@
-import { useState, useCallback } from 'react';
-import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Phone, MapPin, DollarSign, FileText, User } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, RefreshCw, Phone, MapPin, CreditCard, Tag, DollarSign, Calendar, Eye, MessageSquare, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useSyncTrigger } from '@/lib/sync';
-import type { Lead, Project } from '@/lib/types';
-import { mockLeads, mockProjects } from '@/lib/mockData';
-import { formatCurrency } from '@/lib/utils';
-import StatusBadge from '@/components/StatusBadge';
-import Modal from '@/components/Modal';
 
-const ITEMS_PER_PAGE = 20;
+interface LeadItem {
+  id: string | number;
+  date: string;
+  name: string;
+  phone: string;
+  cnic: string;
+  address: string;
+  service: string;
+  budget: string;
+  details: string;
+  isTapOnly: boolean;
+}
 
-const emptyForm = {
-  name: '',
-  phone: '',
-  email: '',
-  budget: '',
-  interested_project_id: '',
-  status: 'new' as Lead['status'],
-  notes: '',
-  cnic: '',
-  address: '',
-  service: '',
-};
+const ITEMS_PER_PAGE = 25;
 
 export default function Leads() {
-  const [leads, setLeads] = useState<Lead[]>(mockLeads);
-  const [projects, setProjects] = useState<Project[]>(mockProjects);
-  const [loading, setLoading] = useState(false);
+  const [leads, setLeads] = useState<LeadItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editLead, setEditLead] = useState<Lead | null>(null);
-  const [form, setForm] = useState(emptyForm);
-  const [saving, setSaving] = useState(false);
+  const [filterType, setFilterType] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [activeLead, setActiveLead] = useState<LeadItem | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [lds, projs] = await Promise.all([
-        supabase.from('leads').select('*, project(*)').order('created_at', { ascending: false }).limit(20),
-        supabase.from('projects').select('*').limit(20),
-      ]);
-      if (lds.data && lds.data.length > 0) setLeads(lds.data);
-      if (projs.data && projs.data.length > 0) setProjects(projs.data);
+      const { data, error } = await supabase
+        .from('dc_card')
+        .select('*')
+        .order('id', { ascending: false });
+
+      if (error) {
+        console.error('Error loading dc_card data:', error);
+      } else if (data) {
+        const mapped: LeadItem[] = data.map((d: any) => {
+          const rawPhone = d.Phone || d.phone || '';
+          const isTap = String(rawPhone).includes('Card Tap') || (!d.Name && !d.Phone);
+
+          return {
+            id: d.id,
+            date: d.Date || d.created_at?.slice(0, 10) || '-',
+            name: d.Name || (isTap ? 'Digital Card Visitor (NFC Tap)' : 'Direct Lead'),
+            phone: rawPhone || '-',
+            cnic: d.CNIC || '-',
+            address: d.ADRESS || d.Address || '-',
+            service: d.Service || (isTap ? 'Profile Visit' : 'Inquiry'),
+            budget: d.Budget || '-',
+            details: d.Details || '',
+            isTapOnly: isTap,
+          };
+        });
+        setLeads(mapped);
+      }
     } catch (err) {
-      console.error('Failed to load leads data:', err);
+      console.error('Failed to load leads:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  function reloadData() { loadData(); }
-  useSyncTrigger(loadData);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-  function openAdd() {
-    setEditLead(null);
-    setForm(emptyForm);
-    setModalOpen(true);
-  }
-
-  function openEdit(l: Lead) {
-    setEditLead(l);
-    setForm({
-      name: l.name,
-      phone: l.phone,
-      email: l.email || '',
-      budget: String(l.budget),
-      interested_project_id: l.interested_project_id || '',
-      status: l.status,
-      notes: l.notes || '',
-      cnic: l.cnic || '',
-      address: l.address || '',
-      service: l.service || '',
-    });
-    setModalOpen(true);
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      const payload = {
-        name: form.name,
-        phone: form.phone,
-        email: form.email || null,
-        budget: Number(form.budget) || 0,
-        interested_project_id: form.interested_project_id || null,
-        status: form.status,
-        notes: form.notes || null,
-        cnic: form.cnic || null,
-        address: form.address || null,
-        service: form.service || null,
-      };
-      if (editLead) {
-        await supabase.from('leads').update(payload).eq('id', editLead.id);
-      } else {
-        await supabase.from('leads').insert(payload);
-      }
-    } catch (err) {
-      console.error('Failed to save lead:', err);
-    } finally {
-      setSaving(false);
-      setModalOpen(false);
-      reloadData();
-    }
-  }
-
-  async function handleDelete(id: string) {
-    try {
-      await supabase.from('leads').delete().eq('id', id);
-    } catch (err) {
-      console.error('Failed to delete lead:', err);
-    }
-    reloadData();
-  }
-
-  const filtered = leads.filter((l) => {
+  const filtered = leads.filter((item) => {
     const q = search.toLowerCase();
-    const matchesSearch = l.name.toLowerCase().includes(q) || l.phone.toLowerCase().includes(q) || (l.cnic || '').toLowerCase().includes(q);
-    const matchesStatus = filterStatus === 'all' || l.status === filterStatus;
-    return matchesSearch && matchesStatus;
+    const matchSearch =
+      item.name.toLowerCase().includes(q) ||
+      item.phone.toLowerCase().includes(q) ||
+      item.service.toLowerCase().includes(q) ||
+      item.details.toLowerCase().includes(q) ||
+      item.address.toLowerCase().includes(q);
+
+    const matchType =
+      filterType === 'all'
+        ? true
+        : filterType === 'leads'
+        ? !item.isTapOnly
+        : item.isTapOnly;
+
+    return matchSearch && matchType;
   });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
   const paginated = filtered.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
 
-  if (loading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-amber-500" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      {/* Filters & Add */}
+      {/* Search & Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search by name, phone, or CNIC..."
+              placeholder="Search leads by name, phone, service, budget..."
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-              className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
             />
           </div>
+
           <select
-            value={filterStatus}
-            onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+            value={filterType}
+            onChange={(e) => {
+              setFilterType(e.target.value);
+              setCurrentPage(1);
+            }}
             className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-amber-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
           >
-            <option value="all">All Status</option>
-            <option value="new">New</option>
-            <option value="follow_up">Follow-up</option>
-            <option value="meeting">Meeting</option>
-            <option value="closed">Closed</option>
+            <option value="all">تمام اینٹریز (All Activity)</option>
+            <option value="leads">صرف کلائنٹ فارم لیڈز (Client Inquiries)</option>
+            <option value="taps">صرف کارڈ وزٹرز (Card Taps)</option>
           </select>
+
+          <button
+            onClick={loadData}
+            title="ریفریش کریں"
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-amber-500/20 transition-all hover:shadow-xl hover:-translate-y-0.5"
-        >
-          <Plus className="h-4 w-4" /> Add Lead
-        </button>
       </div>
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      {/* Main Table */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/50">
               <tr className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Phone</th>
-                <th className="px-4 py-3">CNIC</th>
-                <th className="px-4 py-3">Address</th>
-                <th className="px-4 py-3">Service</th>
-                <th className="px-4 py-3">Budget</th>
-                <th className="px-4 py-3">Details</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-4 py-3">تاریخ</th>
+                <th className="px-4 py-3">نام / نوعیت</th>
+                <th className="px-4 py-3">رابطہ فون</th>
+                <th className="px-4 py-3">سروس کی ڈیمانڈ</th>
+                <th className="px-4 py-3">بجٹ</th>
+                <th className="px-4 py-3">ایڈریس / تفصیل</th>
+                <th className="px-4 py-3 text-center">ایکشن</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {paginated.map((l) => (
-                <tr key={l.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-xs font-bold text-white">
-                        {l.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-800 dark:text-slate-200">{l.name}</p>
-                        <StatusBadge status={l.status} />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300">
-                      <Phone className="h-3 w-3 text-slate-400" /> {l.phone}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs font-mono text-slate-600 dark:text-slate-300">{l.cnic || '-'}</td>
-                  <td className="px-4 py-3">
-                    <span className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300">
-                      <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
-                      <span className="truncate max-w-[180px]">{l.address || '-'}</span>
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {l.service ? (
-                      <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">{l.service}</span>
-                    ) : <span className="text-xs text-slate-300">-</span>}
-                  </td>
-                  <td className="px-4 py-3 font-semibold text-amber-600 dark:text-amber-400">{formatCurrency(Number(l.budget))}</td>
-                  <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <FileText className="h-3 w-3 text-slate-400 shrink-0" />
-                      <span className="truncate max-w-[160px]">{l.notes || l.project?.name || '-'}</span>
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => openEdit(l)} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-amber-600 dark:hover:bg-slate-800">
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button onClick={() => handleDelete(l.id)} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="py-16 text-center">
+                    <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-amber-500" />
+                    <p className="mt-2 text-xs text-slate-400">ڈیجیٹل کارڈ سے لیڈز لوڈ ہو رہی ہیں...</p>
                   </td>
                 </tr>
-              ))}
+              ) : paginated.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-16 text-center text-sm text-slate-400">
+                    کوئی ریکارڈ نہیں ملا۔
+                  </td>
+                </tr>
+              ) : (
+                paginated.map((item) => (
+                  <tr key={item.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3 text-slate-400" />
+                        {item.date}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {item.isTapOnly ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                            <CreditCard className="h-3 w-3 text-slate-400" /> کارڈ وزٹ
+                          </span>
+                        ) : (
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">
+                            {item.name}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {item.phone && item.phone !== '-' && !item.isTapOnly ? (
+                        <span className="inline-flex items-center gap-1 font-mono text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                          <Phone className="h-3 w-3" /> {item.phone}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                        <Tag className="h-3 w-3" /> {item.service}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {item.budget && item.budget !== '-' ? (
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">
+                          {item.budget}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 max-w-[200px] truncate" title={item.details || item.address}>
+                      {item.details || item.address}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => setActiveLead(item)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-600 hover:bg-amber-500 hover:text-black dark:bg-amber-400/20 dark:text-amber-300"
+                      >
+                        <Eye className="h-3.5 w-3.5" /> تفصیل
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
-
-        {paginated.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-sm text-slate-400">No leads match your filters</p>
-          </div>
-        )}
 
         {/* Pagination */}
         {filtered.length > 0 && (
           <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 dark:border-slate-800">
             <p className="text-xs text-slate-400">
-              Showing {(safePage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(safePage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length}
+              کل {filtered.length} اینٹریز | دکھائے جا رہے ہیں {(safePage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(safePage * ITEMS_PER_PAGE, filtered.length)}
             </p>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setCurrentPage(Math.max(1, safePage - 1))}
                 disabled={safePage <= 1}
-                className="rounded-lg border border-slate-200 p-2 text-slate-500 transition-colors hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800"
+                className="rounded-lg border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800"
               >
-                <ChevronLeft className="h-4 w-4" />
+                پچھلا
               </button>
-              <span className="px-3 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300">{safePage} / {totalPages}</span>
+              <span className="px-3 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                {safePage} / {totalPages}
+              </span>
               <button
                 onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))}
                 disabled={safePage >= totalPages}
-                className="rounded-lg border border-slate-200 p-2 text-slate-500 transition-colors hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800"
+                className="rounded-lg border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800"
               >
-                <ChevronRight className="h-4 w-4" />
+                اگلا
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Add/Edit Modal */}
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editLead ? 'Edit Lead' : 'Add New Lead'}
-        footer={
-          <>
-            <button onClick={() => setModalOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300">Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2 text-sm font-semibold text-white shadow-lg disabled:opacity-50">
-              {saving ? 'Saving...' : editLead ? 'Update' : 'Add Lead'}
-            </button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Name">
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="John Doe" />
-            </FormField>
-            <FormField label="Phone">
-              <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={inputClass} placeholder="+92 300 1234567" />
-            </FormField>
+      {/* Details Modal */}
+      {activeLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl dark:bg-slate-900 border border-amber-500/30 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-amber-500/10 px-6 py-4 dark:border-slate-800">
+              <h3 className="font-bold text-slate-900 dark:text-amber-400">ڈیجیٹل کارڈ انکوائری تفصیل</h3>
+              <button
+                onClick={() => setActiveLead(null)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-400">کلائنٹ کا نام</p>
+                  <p className="font-bold text-slate-800 dark:text-slate-100">{activeLead.name}</p>
+                </div>
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-400">فون نمبر</p>
+                  <div className="flex items-center justify-between">
+                    <p className="font-mono font-bold text-amber-600 dark:text-amber-400">{activeLead.phone}</p>
+                    {activeLead.phone && activeLead.phone !== '-' && (
+                      <a
+                        href={`https://wa.me/${activeLead.phone.replace(/[^0-9]/g, '')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-md bg-emerald-500 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-emerald-600"
+                      >
+                        WhatsApp
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-400">ڈیمانڈ / سروس</p>
+                  <p className="font-semibold text-slate-700 dark:text-slate-300">{activeLead.service}</p>
+                </div>
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-400">بجٹ</p>
+                  <p className="font-semibold text-emerald-600 dark:text-emerald-400">{activeLead.budget}</p>
+                </div>
+              </div>
+
+              {activeLead.cnic && activeLead.cnic !== '-' && (
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-400">شناختی کارڈ نمبر (CNIC)</p>
+                  <p className="font-mono text-sm text-slate-700 dark:text-slate-300">{activeLead.cnic}</p>
+                </div>
+              )}
+
+              {activeLead.address && activeLead.address !== '-' && (
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-400">ایڈریس</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300">{activeLead.address}</p>
+                </div>
+              )}
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  انکوائری تفصیلات / میسج:
+                </label>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+                  {activeLead.details || 'کوئی اضافی تفصیل درج نہیں ہے۔'}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-6 py-3 dark:border-slate-800 dark:bg-slate-900">
+              <button
+                onClick={() => setActiveLead(null)}
+                className="rounded-lg bg-slate-200 px-4 py-2 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+              >
+                بند کریں
+              </button>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="CNIC">
-              <input value={form.cnic} onChange={(e) => setForm({ ...form, cnic: e.target.value })} className={inputClass} placeholder="42101-1234567-1" />
-            </FormField>
-            <FormField label="Email">
-              <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} placeholder="john@email.com" />
-            </FormField>
-          </div>
-          <FormField label="Address">
-            <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={inputClass} placeholder="Block A, Gulshan, Karachi" />
-          </FormField>
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Service">
-              <input value={form.service} onChange={(e) => setForm({ ...form, service: e.target.value })} className={inputClass} placeholder="Residential Plot" />
-            </FormField>
-            <FormField label="Budget (PKR)">
-              <input type="number" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} className={inputClass} placeholder="5000000" />
-            </FormField>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Interested Project">
-              <select value={form.interested_project_id} onChange={(e) => setForm({ ...form, interested_project_id: e.target.value })} className={inputClass}>
-                <option value="">None</option>
-                {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </FormField>
-            <FormField label="Status">
-              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Lead['status'] })} className={inputClass}>
-                <option value="new">New</option>
-                <option value="follow_up">Follow-up</option>
-                <option value="meeting">Meeting</option>
-                <option value="closed">Closed Deal</option>
-              </select>
-            </FormField>
-          </div>
-          <FormField label="Details / Notes">
-            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={`${inputClass} min-h-[80px] resize-y`} placeholder="Additional notes..." />
-          </FormField>
         </div>
-      </Modal>
-    </div>
-  );
-}
-
-const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
-
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="mb-1.5 block text-sm font-medium text-slate-600 dark:text-slate-400">{label}</label>
-      {children}
+      )}
     </div>
   );
 }
