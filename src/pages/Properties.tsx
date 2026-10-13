@@ -29,30 +29,26 @@ export default function Properties() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Properties ٹیبل سے ڈیٹا حاصل کریں
-      const propsRes = await supabase
-        .from('properties')
-        .select('*')
-        .order('id', { ascending: false });
+      const [propsRes, privRes] = await Promise.all([
+        supabase
+          .from('properties')
+          .select('*')
+          .order('id', { ascending: false }),
+        supabase
+          .from('private_crm')
+          .select('*'),
+      ]);
 
-      // 2. Private CRM ٹیبل سے ڈیٹا حاصل کریں
-      const privRes = await supabase
-        .from('private_crm')
-        .select('*');
+      const privateById = new Map<string, any>();
+      const privateByTitle = new Map<string, any>();
 
-      console.log('Props count:', propsRes.data?.length);
-      console.log('Private count:', privRes.data?.length);
-
-      // Private CRM کا آسان میپ بنائیں
-      const privateMap = new Map<string, any>();
       if (privRes.data) {
-        for (const item of privRes.data) {
-          // ID کو ہر ممکن طریقے سے کی (Key) بنائیں
-          const rawId = String(item.ID ?? item.id ?? '').trim();
-          const cleanTitle = String(item.Title ?? item.title ?? '').trim().toLowerCase();
-          
-          if (rawId) privateMap.set(rawId, item);
-          if (cleanTitle) privateMap.set(cleanTitle, item);
+        for (const row of privRes.data) {
+          const rawId = String(row.ID ?? row.id ?? '').trim();
+          const rawTitle = String(row.Title ?? row.title ?? '').trim().toLowerCase();
+
+          if (rawId) privateById.set(rawId, row);
+          if (rawTitle) privateByTitle.set(rawTitle, row);
         }
       }
 
@@ -61,33 +57,26 @@ export default function Properties() {
           const pId = String(p.ID ?? p.id ?? '').trim();
           const pTitle = String(p.Title ?? p.title ?? '').trim().toLowerCase();
 
-          // پہلے ID سے تلاش کریں، نہ ملے تو Title سے
-          const priv = privateMap.get(pId) || privateMap.get(pTitle) || {};
+          const priv = privateById.get(pId) || privateByTitle.get(pTitle) || {};
 
-          // نام، فون اور میسج تمام ممکنہ کالمز سے نکالیں
-          const origName = 
-            priv['Original Dealer Name'] || 
-            priv['Original Dealer'] || 
-            priv['Original De'] || 
-            p['Original Dealer Name'] || 
-            p['original_dealer_name'] || 
+          const origName =
+            priv['Original Dealer Name'] ||
+            priv['original_dealer_name'] ||
+            p['Original Dealer Name'] ||
             '';
 
-          const origPhone = 
-            priv['Original Dealer Phone'] || 
-            priv['Original Phone'] || 
-            priv['Original De'] || 
-            p['Original Dealer Phone'] || 
-            p['original_dealer_phone'] || 
+          const origPhone =
+            priv['Original Dealer Phone'] ||
+            priv['original_dealer_phone'] ||
+            p['Original Dealer Phone'] ||
             '';
 
-          const fullMsg = 
-            priv['Full Description'] || 
-            priv['Full Descri'] || 
-            priv['description'] || 
-            p['Full Description'] || 
-            p['Description'] || 
-            p['description'] || 
+          const fullMsg =
+            priv['Full Description'] ||
+            priv['full_description'] ||
+            p['Full Description'] ||
+            priv['Description'] ||
+            p['Description'] ||
             '';
 
           return {
@@ -99,16 +88,16 @@ export default function Properties() {
             price: p.Price || p.price || '-',
             phone: p.Phone || p.phone || '-',
             description: p.Description || p.description || '',
-            original_dealer_name: origName.trim() || undefined,
-            original_dealer_phone: origPhone.trim() || undefined,
-            full_description: fullMsg.trim() || undefined,
+            original_dealer_name: origName ? String(origName).trim() : undefined,
+            original_dealer_phone: origPhone ? String(origPhone).trim() : undefined,
+            full_description: fullMsg ? String(fullMsg).trim() : undefined,
           };
         });
 
         setProperties(mapped);
       }
     } catch (err) {
-      console.error('Error fetching properties or private_crm:', err);
+      console.error('Failed to load combined properties:', err);
     } finally {
       setLoading(false);
     }
@@ -141,14 +130,14 @@ export default function Properties() {
 
   return (
     <div className="space-y-6">
-      {/* Top Controls */}
+      {/* Search & Filter Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search title, society, private owner, or full msg..."
+              placeholder="Search title, society, private dealer, or full msg..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -176,7 +165,7 @@ export default function Properties() {
 
           <button
             onClick={loadData}
-            title="Reload Properties & Private Msg"
+            title="ریفریش کریں"
             className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -196,7 +185,7 @@ export default function Properties() {
                 <th className="px-4 py-3">Society</th>
                 <th className="px-4 py-3">Price</th>
                 <th className="px-4 py-3">Display Contact</th>
-                <th className="px-4 py-3 text-center">Private CRM Data</th>
+                <th className="px-4 py-3 text-center">Private CRM</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -204,13 +193,13 @@ export default function Properties() {
                 <tr>
                   <td colSpan={7} className="py-16 text-center">
                     <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-amber-500" />
-                    <p className="mt-2 text-xs text-slate-400">Loading Properties & Matching Private CRM Messages...</p>
+                    <p className="mt-2 text-xs text-slate-400">پراپرٹیز اور پرائیویٹ میسجز لوڈ ہو رہے ہیں...</p>
                   </td>
                 </tr>
               ) : paginated.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-16 text-center text-sm text-slate-400">
-                    No properties found.
+                    کوئی ریکارڈ نہیں ملا۔
                   </td>
                 </tr>
               ) : (
@@ -288,11 +277,10 @@ export default function Properties() {
         )}
       </div>
 
-      {/* Private CRM Popup Modal */}
+      {/* Private Details Modal */}
       {activePrivateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl dark:bg-slate-900 border border-amber-500/30 overflow-hidden">
-            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-200 bg-amber-500/10 px-6 py-4 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 text-amber-500" />
@@ -308,7 +296,6 @@ export default function Properties() {
               </button>
             </div>
 
-            {/* Modal Body */}
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-3.5 dark:border-slate-800 dark:bg-slate-800/50">
@@ -338,12 +325,11 @@ export default function Properties() {
                 </div>
               </div>
 
-              {/* Full Description / Raw Message */}
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
                   <MessageSquare className="h-4 w-4 text-amber-500" />
                   <label className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
-                    مکمل اصل میسج (Full Raw Description):
+                    مکمل اصل میسج (Full Description):
                   </label>
                 </div>
                 <div className="max-h-60 overflow-y-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-sans text-sm leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
@@ -352,7 +338,6 @@ export default function Properties() {
               </div>
             </div>
 
-            {/* Modal Footer */}
             <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-6 py-3.5 dark:border-slate-800 dark:bg-slate-900">
               <button
                 onClick={() => setActivePrivateModal(null)}
