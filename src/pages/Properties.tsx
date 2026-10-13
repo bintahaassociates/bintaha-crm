@@ -30,42 +30,67 @@ export default function Properties() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. properties اور private_crm دونوں کو ایک ساتھ لوڈ کرنا
+      // 1. private_crm کا تمام ڈیٹا (پوری 1,367+ روز) لانا
       const [propsRes, privateRes] = await Promise.all([
-        supabase.from('properties').select('*').order('id', { ascending: false }),
-        supabase.from('private_crm').select('*'),
+        supabase
+          .from('properties')
+          .select('*')
+          .order('id', { ascending: false })
+          .range(0, 4000),
+        supabase
+          .from('private_crm')
+          .select('*')
+          .range(0, 4000),
       ]);
 
-      const privateMap = new Map<string, any>();
+      // میچنگ کے لیے دو میپس: ایک ID سے اور ایک Title سے
+      const privateById = new Map<string, any>();
+      const privateByTitle = new Map<string, any>();
+
       if (privateRes.data) {
-        for (const item of privateRes.data) {
-          const key = String(item.ID || item.id || '').trim();
-          if (key) {
-            privateMap.set(key, item);
-          }
+        for (const row of privateRes.data) {
+          const idKey = String(row.ID || row.id || '').trim();
+          const titleKey = String(row.Title || row.title || '').trim().toLowerCase();
+
+          if (idKey) privateById.set(idKey, row);
+          if (titleKey) privateByTitle.set(titleKey, row);
         }
       }
 
       if (propsRes.data) {
         const mapped: PropertyItem[] = propsRes.data.map((p: any) => {
-          const matchingKey = String(p.ID || p.id || '').trim();
-          const priv = privateMap.get(matchingKey);
+          const pId = String(p.ID || p.id || '').trim();
+          const pTitle = String(p.Title || p.title || '').trim().toLowerCase();
+
+          // پہلے ID سے ملائیں، نہ ملے تو Title سے ملائیں
+          const priv = privateById.get(pId) || privateByTitle.get(pTitle);
+
+          // پرائیویٹ CRM کے کالمز
+          const origName = priv
+            ? priv['Original Dealer Name'] || priv['Original Dealer'] || priv['Original De'] || priv.original_dealer_name
+            : '';
+          const origPhone = priv
+            ? priv['Original Dealer Phone'] || priv['Original Phone'] || priv['Original De'] || priv.original_dealer_phone
+            : '';
+          const fullDesc = priv
+            ? priv['Full Description'] || priv['Full Descri'] || priv.full_description
+            : '';
 
           return {
             id: p.id,
-            prop_id: matchingKey || '-',
+            prop_id: p.ID || p.id || '-',
             title: p.Title || p.title || 'Untitled Property',
             type: p.Type || p.type || 'Plot',
             society: p.Society || p.society || 'Lahore',
             price: p.Price || p.price || '-',
             phone: p.Phone || p.phone || '-',
             description: p.Description || p.description || '',
-            // Private CRM se original details
-            original_dealer_name: priv ? (priv['Original Dealer Name'] || priv['Original De'] || priv.original_dealer_name || 'N/A') : undefined,
-            original_dealer_phone: priv ? (priv['Original Dealer Phone'] || priv['Original De'] || priv.original_dealer_phone || '-') : undefined,
-            full_description: priv ? (priv['Full Description'] || priv['Full Descri'] || priv.full_description || '') : undefined,
+            original_dealer_name: origName || undefined,
+            original_dealer_phone: origPhone || undefined,
+            full_description: fullDesc || undefined,
           };
         });
+
         setProperties(mapped);
       }
     } catch (err) {
@@ -79,7 +104,6 @@ export default function Properties() {
     loadData();
   }, [loadData]);
 
-  // Unique Societies list
   const societies = Array.from(new Set(properties.map((p) => p.society).filter(Boolean)));
 
   const filtered = properties.filter((p) => {
@@ -88,7 +112,7 @@ export default function Properties() {
       p.title.toLowerCase().includes(q) ||
       p.society.toLowerCase().includes(q) ||
       p.phone.toLowerCase().includes(q) ||
-      p.prop_id.toLowerCase().includes(q) ||
+      String(p.prop_id).toLowerCase().includes(q) ||
       (p.original_dealer_name && p.original_dealer_name.toLowerCase().includes(q)) ||
       (p.original_dealer_phone && p.original_dealer_phone.toLowerCase().includes(q)) ||
       (p.full_description && p.full_description.toLowerCase().includes(q));
@@ -110,7 +134,7 @@ export default function Properties() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search title, society, private owner, or full msg..."
+              placeholder="Search title, society, private owner, phone, or msg..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -138,7 +162,7 @@ export default function Properties() {
 
           <button
             onClick={loadData}
-            title="Reload Properties & Private Msg"
+            title="Reload Data"
             className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -158,7 +182,7 @@ export default function Properties() {
                 <th className="px-4 py-3">Society</th>
                 <th className="px-4 py-3">Price</th>
                 <th className="px-4 py-3">Display Contact</th>
-                <th className="px-4 py-3 text-center">Private CRM Data</th>
+                <th className="px-4 py-3 text-center">Private CRM</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -166,18 +190,18 @@ export default function Properties() {
                 <tr>
                   <td colSpan={7} className="py-16 text-center">
                     <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-amber-500" />
-                    <p className="mt-2 text-xs text-slate-400">Loading Properties & Matching Private CRM Messages...</p>
+                    <p className="mt-2 text-xs text-slate-400">تمام پراپرٹیز اور اصل پرائیویٹ میسجز لوڈ ہو رہے ہیں...</p>
                   </td>
                 </tr>
               ) : paginated.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-16 text-center text-sm text-slate-400">
-                    No properties found.
+                    کوئی ریکارڈ نہیں ملا۔
                   </td>
                 </tr>
               ) : (
                 paginated.map((p) => {
-                  const hasPrivate = Boolean(p.full_description || p.original_dealer_phone);
+                  const hasPrivate = Boolean(p.original_dealer_name || p.original_dealer_phone || p.full_description);
                   return (
                     <tr key={p.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
                       <td className="px-4 py-3 font-mono text-xs text-slate-400">{p.prop_id}</td>
@@ -205,12 +229,12 @@ export default function Properties() {
                           onClick={() => setActivePrivateModal(p)}
                           className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                             hasPrivate
-                              ? 'bg-amber-500/10 text-amber-600 hover:bg-amber-500 hover:text-black dark:bg-amber-400/20 dark:text-amber-300 dark:hover:bg-amber-400 dark:hover:text-black'
+                              ? 'bg-amber-500 text-black hover:bg-amber-600 shadow-sm font-bold'
                               : 'bg-slate-100 text-slate-400 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-500'
                           }`}
                         >
                           <Eye className="h-3.5 w-3.5" />
-                          {hasPrivate ? 'اصل میسج دیکھیں' : 'ڈیٹیلز'}
+                          {hasPrivate ? 'اصل ڈیٹا دیکھیں' : 'تفصیلات'}
                         </button>
                       </td>
                     </tr>
@@ -250,10 +274,10 @@ export default function Properties() {
         )}
       </div>
 
-      {/* Private CRM Details Popup Modal */}
+      {/* Private CRM Popup Modal */}
       {activePrivateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl dark:bg-slate-900 border border-amber-500/30 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl dark:bg-slate-900 border border-amber-500/30 overflow-hidden">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-200 bg-amber-500/10 px-6 py-4 dark:border-slate-800">
               <div className="flex items-center gap-2">
@@ -305,7 +329,7 @@ export default function Properties() {
                 <div className="flex items-center gap-1.5 mb-2">
                   <MessageSquare className="h-4 w-4 text-amber-500" />
                   <label className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
-                    مکمل اصل میسج (Full Description):
+                    مکمل اصل میسج (Full Raw Description):
                   </label>
                 </div>
                 <div className="max-h-60 overflow-y-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-sans text-sm leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
