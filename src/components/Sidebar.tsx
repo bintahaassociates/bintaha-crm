@@ -13,6 +13,7 @@ const navItems: { id: PageId; label: string; icon: typeof LayoutDashboard }[] = 
   { id: 'properties', label: 'Properties Hub', icon: MapPin },
   { id: 'leads', label: 'Leads Hub', icon: Users },
   { id: 'dealers', label: 'Dealers Directory', icon: UserCircle },
+  { id: 'allottees', label: 'Allottees Directory', icon: UserCheck },
   { id: 'staff', label: 'Staff & Agents', icon: UserCog },
   { id: 'bookings', label: 'Bookings & Installments', icon: ReceiptText },
   { id: 'projects', label: 'Projects', icon: Building2 },
