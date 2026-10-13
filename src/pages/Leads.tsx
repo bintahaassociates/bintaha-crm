@@ -1,5 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, RefreshCw, Phone, MapPin, CreditCard, Tag, DollarSign, Calendar, Eye, MessageSquare, X } from 'lucide-react';
+import { 
+  Search, 
+  RefreshCw, 
+  Phone, 
+  MapPin, 
+  CreditCard, 
+  Tag, 
+  DollarSign, 
+  Calendar, 
+  Eye, 
+  MessageSquare, 
+  X,
+  Users,
+  Smartphone,
+  TrendingUp,
+  ExternalLink,
+  Layers,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface LeadItem {
@@ -18,10 +37,10 @@ interface LeadItem {
 const ITEMS_PER_PAGE = 25;
 
 export default function Leads() {
+  const [activeTab, setActiveTab] = useState<'all' | 'leads' | 'taps'>('all');
   const [leads, setLeads] = useState<LeadItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterType, setFilterType] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [activeLead, setActiveLead] = useState<LeadItem | null>(null);
 
@@ -66,6 +85,12 @@ export default function Leads() {
     loadData();
   }, [loadData]);
 
+  // Statistics Calculation
+  const totalInteractions = leads.length;
+  const verifiedLeadsCount = leads.filter((item) => !item.isTapOnly).length;
+  const cardTapsCount = leads.filter((item) => item.isTapOnly).length;
+  const highBudgetCount = leads.filter((item) => item.budget && item.budget !== '-' && item.budget !== 'NULL').length;
+
   const filtered = leads.filter((item) => {
     const q = search.toLowerCase();
     const matchSearch =
@@ -75,14 +100,14 @@ export default function Leads() {
       item.details.toLowerCase().includes(q) ||
       item.address.toLowerCase().includes(q);
 
-    const matchType =
-      filterType === 'all'
-        ? true
-        : filterType === 'leads'
-        ? !item.isTapOnly
-        : item.isTapOnly;
+    let matchTab = true;
+    if (activeTab === 'leads') {
+      matchTab = !item.isTapOnly;
+    } else if (activeTab === 'taps') {
+      matchTab = item.isTapOnly;
+    }
 
-    return matchSearch && matchType;
+    return matchSearch && matchTab;
   });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
@@ -91,7 +116,117 @@ export default function Leads() {
 
   return (
     <div className="space-y-6">
-      {/* Search & Filters */}
+      {/* 4 Stat Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Total Interactions */}
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Card Taps & Leads</p>
+            <p className="mt-2 text-2xl font-bold text-slate-800 dark:text-slate-100">{totalInteractions}</p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
+            <Smartphone className="h-5 w-5" />
+          </div>
+        </div>
+
+        {/* Direct Client Inquiries */}
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Direct Client Leads</p>
+            <p className="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{verifiedLeadsCount}</p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+            <Users className="h-5 w-5" />
+          </div>
+        </div>
+
+        {/* NFC Visitors */}
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">NFC Profile Visitors</p>
+            <p className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">{cardTapsCount}</p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500">
+            <CreditCard className="h-5 w-5" />
+          </div>
+        </div>
+
+        {/* High Budget Inquiries */}
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Budgeted Inquiries</p>
+            <p className="mt-2 text-2xl font-bold text-purple-600 dark:text-purple-400">{highBudgetCount}</p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-500/10 text-purple-500">
+            <TrendingUp className="h-5 w-5" />
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs Navigation */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2 dark:border-slate-800">
+        <button
+          onClick={() => {
+            setActiveTab('all');
+            setCurrentPage(1);
+          }}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+            activeTab === 'all'
+              ? 'border-amber-500 text-amber-500'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+          }`}
+        >
+          <Layers className="h-4 w-4" /> All Activity
+          <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
+            {totalInteractions}
+          </span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('leads');
+            setCurrentPage(1);
+          }}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+            activeTab === 'leads'
+              ? 'border-amber-500 text-amber-500'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+          }`}
+        >
+          <Users className="h-4 w-4" /> Client Inquiries
+          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-600 dark:text-emerald-400">
+            {verifiedLeadsCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('taps');
+            setCurrentPage(1);
+          }}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+            activeTab === 'taps'
+              ? 'border-amber-500 text-amber-500'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+          }`}
+        >
+          <CreditCard className="h-4 w-4" /> NFC Card Visitors
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+            {cardTapsCount}
+          </span>
+        </button>
+
+        <a
+          href="https://bintahaassociates.github.io/bintaha-dc/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto flex items-center gap-1.5 text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400"
+        >
+          <ExternalLink className="h-3.5 w-3.5" /> Live Digital Card
+        </a>
+      </div>
+
+      {/* Search & Actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[240px]">
@@ -107,19 +242,6 @@ export default function Leads() {
               className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
             />
           </div>
-
-          <select
-            value={filterType}
-            onChange={(e) => {
-              setFilterType(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-amber-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-          >
-            <option value="all">تمام اینٹریز (All Activity)</option>
-            <option value="leads">صرف کلائنٹ فارم لیڈز (Client Inquiries)</option>
-            <option value="taps">صرف کارڈ وزٹرز (Card Taps)</option>
-          </select>
 
           <button
             onClick={loadData}
@@ -197,7 +319,7 @@ export default function Leads() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      {item.budget && item.budget !== '-' ? (
+                      {item.budget && item.budget !== '-' && item.budget !== 'NULL' ? (
                         <span className="font-semibold text-slate-700 dark:text-slate-300">
                           {item.budget}
                         </span>
@@ -235,7 +357,7 @@ export default function Leads() {
                 disabled={safePage <= 1}
                 className="rounded-lg border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800"
               >
-                پچھلا
+                <ChevronLeft className="h-4 w-4" />
               </button>
               <span className="px-3 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300">
                 {safePage} / {totalPages}
@@ -245,7 +367,7 @@ export default function Leads() {
                 disabled={safePage >= totalPages}
                 className="rounded-lg border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800"
               >
-                اگلا
+                <ChevronRight className="h-4 w-4" />
               </button>
             </div>
           </div>
@@ -301,14 +423,14 @@ export default function Leads() {
                 </div>
               </div>
 
-              {activeLead.cnic && activeLead.cnic !== '-' && (
+              {activeLead.cnic && activeLead.cnic !== '-' && activeLead.cnic !== 'NULL' && (
                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/50">
                   <p className="text-xs text-slate-400">شناختی کارڈ نمبر (CNIC)</p>
                   <p className="font-mono text-sm text-slate-700 dark:text-slate-300">{activeLead.cnic}</p>
                 </div>
               )}
 
-              {activeLead.address && activeLead.address !== '-' && (
+              {activeLead.address && activeLead.address !== '-' && activeLead.address !== 'NULL' && (
                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/50">
                   <p className="text-xs text-slate-400">ایڈریس</p>
                   <p className="text-sm text-slate-700 dark:text-slate-300">{activeLead.address}</p>
