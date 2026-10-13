@@ -6,6 +6,7 @@ import Dashboard from '@/pages/Dashboard';
 import Properties from '@/pages/Properties';
 import Leads from '@/pages/Leads';
 import Dealers from '@/pages/Dealers';
+import Allottees from '@/pages/Allottees';
 import Bookings from '@/pages/Bookings';
 import Projects from '@/pages/Projects';
 import Staff from '@/pages/Staff';
@@ -17,6 +18,7 @@ const pageConfig: Record<string, { title: string; subtitle: string }> = {
   properties: { title: 'Property Inventory', subtitle: 'Manage and track all your plots and properties' },
   leads: { title: 'Leads & Clients', subtitle: 'Track your sales pipeline and client interactions' },
   dealers: { title: 'Dealers Directory', subtitle: 'Manage registered real estate dealers and network partners' },
+  allottees: { title: 'Allottees Directory', subtitle: 'Verified plot files, owners registry, and block records' },
   bookings: { title: 'Bookings & Installments', subtitle: 'Record sales, generate receipts, and track payment schedules' },
   projects: { title: 'Projects Overview', subtitle: 'Manage societies, buildings, and construction progress' },
   staff: { title: 'Agents & Staff Activity', subtitle: 'Monitor staff performance, call logs, and client interactions' },
@@ -33,6 +35,7 @@ function App() {
       case 'properties': return <Properties />;
       case 'leads': return <Leads />;
       case 'dealers' as any: return <Dealers />;
+      case 'allottees' as any: return <Allottees />;
       case 'bookings': return <Bookings />;
       case 'projects': return <Projects />;
       case 'staff': return <Staff />;
