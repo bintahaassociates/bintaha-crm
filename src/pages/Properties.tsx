@@ -26,78 +26,112 @@ export default function Properties() {
   const [currentPage, setCurrentPage] = useState(1);
   const [activePrivateModal, setActivePrivateModal] = useState<PropertyItem | null>(null);
 
+  // تمام ریکارڈز مکمل لانے کے لیے پائتھن اسٹائل ہیلپر فنکشن
+  async function fetchAllRows(tableName: string) {
+    let allData: any[] = [];
+    let from = 0;
+    const step = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('*')
+        .range(from, from + step - 1);
+
+      if (error || !data || data.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      allData = allData.concat(data);
+      if (data.length < step) {
+        hasMore = false;
+      } else {
+        from += step;
+      }
+    }
+    return allData;
+  }
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [propsRes, privRes] = await Promise.all([
-        supabase
-          .from('properties')
-          .select('*')
-          .order('id', { ascending: false }),
-        supabase
-          .from('private_crm')
-          .select('*'),
+      // 1. دونوں ٹیبلز کا 100% پورا ڈیٹا بغیر کٹے لانا
+      const [propsData, privateData] = await Promise.all([
+        fetchAllRows('properties'),
+        fetchAllRows('private_crm'),
       ]);
 
-      const privateById = new Map<string, any>();
-      const privateByTitle = new Map<string, any>();
+      // 2. Python Dict لاجک: private_crm کی مکمل ڈکشنری بنانا
+      const privateDict: Record<string, any> = {};
 
-      if (privRes.data) {
-        for (const row of privRes.data) {
-          const rawId = String(row.ID ?? row.id ?? '').trim();
-          const rawTitle = String(row.Title ?? row.title ?? '').trim().toLowerCase();
+      for (const row of privateData) {
+        // تمام ممکنہ کیز (ID، صاف اسٹرنگ، ٹائٹل) کو ڈکشنری میں ڈالیں
+        const rawId = String(row.ID ?? row.id ?? '').trim();
+        const rawTitle = String(row.Title ?? row.title ?? '').trim().toLowerCase();
 
-          if (rawId) privateById.set(rawId, row);
-          if (rawTitle) privateByTitle.set(rawTitle, row);
+        if (rawId) {
+          privateDict[rawId] = row;
+        }
+        if (rawTitle) {
+          privateDict[`title_${rawTitle}`] = row;
         }
       }
 
-      if (propsRes.data) {
-        const mapped: PropertyItem[] = propsRes.data.map((p: any) => {
-          const pId = String(p.ID ?? p.id ?? '').trim();
-          const pTitle = String(p.Title ?? p.title ?? '').trim().toLowerCase();
+      // 3. Properties کے ہر ریکارڈ کو Python لاجک کے تحت میچ کرنا
+      const mapped: PropertyItem[] = propsData.map((p: any) => {
+        const pId = String(p.ID ?? p.id ?? '').trim();
+        const pTitle = String(p.Title ?? p.title ?? '').trim().toLowerCase();
 
-          const priv = privateById.get(pId) || privateByTitle.get(pTitle) || {};
+        // میچنگ ترجیح: 1. ID کے ذریعے، 2. ٹائٹل کے ذریعے
+        const priv = privateDict[pId] || privateDict[`title_${pTitle}`] || {};
 
-          const origName =
-            priv['Original Dealer Name'] ||
-            priv['original_dealer_name'] ||
-            p['Original Dealer Name'] ||
-            '';
+        // اصل ڈیلر نام
+        const origName =
+          priv['Original Dealer Name'] ||
+          priv['original_dealer_name'] ||
+          priv['Original Dealer'] ||
+          p['Original Dealer Name'] ||
+          '';
 
-          const origPhone =
-            priv['Original Dealer Phone'] ||
-            priv['original_dealer_phone'] ||
-            p['Original Dealer Phone'] ||
-            '';
+        // اصل فون نمبر
+        const origPhone =
+          priv['Original Dealer Phone'] ||
+          priv['original_dealer_phone'] ||
+          priv['Original Phone'] ||
+          p['Original Dealer Phone'] ||
+          '';
 
-          const fullMsg =
-            priv['Full Description'] ||
-            priv['full_description'] ||
-            p['Full Description'] ||
-            priv['Description'] ||
-            p['Description'] ||
-            '';
+        // پورا اصل میسج
+        const fullMsg =
+          priv['Full Description'] ||
+          priv['full_description'] ||
+          priv['Description'] ||
+          p['Full Description'] ||
+          p['Description'] ||
+          '';
 
-          return {
-            id: p.id,
-            prop_id: p.ID || p.id || '-',
-            title: p.Title || p.title || 'Untitled Property',
-            type: p.Type || p.type || 'Plot',
-            society: p.Society || p.society || 'Lahore',
-            price: p.Price || p.price || '-',
-            phone: p.Phone || p.phone || '-',
-            description: p.Description || p.description || '',
-            original_dealer_name: origName ? String(origName).trim() : undefined,
-            original_dealer_phone: origPhone ? String(origPhone).trim() : undefined,
-            full_description: fullMsg ? String(fullMsg).trim() : undefined,
-          };
-        });
+        return {
+          id: p.id,
+          prop_id: p.ID || p.id || '-',
+          title: p.Title || p.title || 'Untitled Property',
+          type: p.Type || p.type || 'Plot',
+          society: p.Society || p.society || 'Lahore',
+          price: p.Price || p.price || '-',
+          phone: p.Phone || p.phone || '-',
+          description: p.Description || p.description || '',
+          original_dealer_name: origName ? String(origName).trim() : undefined,
+          original_dealer_phone: origPhone ? String(origPhone).trim() : undefined,
+          full_description: fullMsg ? String(fullMsg).trim() : undefined,
+        };
+      });
 
-        setProperties(mapped);
-      }
+      // تازہ ترین ریکارڈ سب سے اوپر
+      mapped.sort((a, b) => Number(b.id) - Number(a.id));
+      setProperties(mapped);
     } catch (err) {
-      console.error('Failed to load combined properties:', err);
+      console.error('Python-bridge matching error:', err);
     } finally {
       setLoading(false);
     }
@@ -130,7 +164,7 @@ export default function Properties() {
 
   return (
     <div className="space-y-6">
-      {/* Search & Filter Bar */}
+      {/* Top Search & Filter Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[240px]">
@@ -165,7 +199,7 @@ export default function Properties() {
 
           <button
             onClick={loadData}
-            title="ریفریش کریں"
+            title="Reload Properties & Private Msg"
             className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -193,7 +227,7 @@ export default function Properties() {
                 <tr>
                   <td colSpan={7} className="py-16 text-center">
                     <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-amber-500" />
-                    <p className="mt-2 text-xs text-slate-400">پراپرٹیز اور پرائیویٹ میسجز لوڈ ہو رہے ہیں...</p>
+                    <p className="mt-2 text-xs text-slate-400">تمام 3,382 پراپرٹیز اور پرائیویٹ میسجز سنک ہو رہے ہیں...</p>
                   </td>
                 </tr>
               ) : paginated.length === 0 ? (
