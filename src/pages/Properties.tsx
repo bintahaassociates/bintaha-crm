@@ -1,5 +1,23 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, ChevronLeft, ChevronRight, Phone, MapPin, RefreshCw, Tag, Eye, MessageSquare, ShieldCheck, X } from 'lucide-react';
+import { 
+  Search, 
+  ChevronLeft, 
+  ChevronRight, 
+  Phone, 
+  MapPin, 
+  RefreshCw, 
+  Tag, 
+  Eye, 
+  MessageSquare, 
+  ShieldCheck, 
+  X,
+  Home,
+  Building,
+  Layers,
+  Map,
+  Shield,
+  ExternalLink
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface PropertyItem {
@@ -19,6 +37,7 @@ interface PropertyItem {
 const ITEMS_PER_PAGE = 25;
 
 export default function Properties() {
+  const [activeTab, setActiveTab] = useState<'all' | 'residential' | 'commercial' | 'private_only'>('all');
   const [properties, setProperties] = useState<PropertyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -26,7 +45,7 @@ export default function Properties() {
   const [currentPage, setCurrentPage] = useState(1);
   const [activePrivateModal, setActivePrivateModal] = useState<PropertyItem | null>(null);
 
-  // تمام ریکارڈز مکمل لانے کے لیے پائتھن اسٹائل ہیلپر فنکشن
+  // Supabase سے پورا ڈیٹا چھوٹے بیجز میں لانے والا ہیلپر
   async function fetchAllRows(tableName: string) {
     let allData: any[] = [];
     let from = 0;
@@ -57,17 +76,14 @@ export default function Properties() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. دونوں ٹیبلز کا 100% پورا ڈیٹا بغیر کٹے لانا
       const [propsData, privateData] = await Promise.all([
         fetchAllRows('properties'),
         fetchAllRows('private_crm'),
       ]);
 
-      // 2. Python Dict لاجک: private_crm کی مکمل ڈکشنری بنانا
       const privateDict: Record<string, any> = {};
 
       for (const row of privateData) {
-        // تمام ممکنہ کیز (ID، صاف اسٹرنگ، ٹائٹل) کو ڈکشنری میں ڈالیں
         const rawId = String(row.ID ?? row.id ?? '').trim();
         const rawTitle = String(row.Title ?? row.title ?? '').trim().toLowerCase();
 
@@ -79,15 +95,12 @@ export default function Properties() {
         }
       }
 
-      // 3. Properties کے ہر ریکارڈ کو Python لاجک کے تحت میچ کرنا
       const mapped: PropertyItem[] = propsData.map((p: any) => {
         const pId = String(p.ID ?? p.id ?? '').trim();
         const pTitle = String(p.Title ?? p.title ?? '').trim().toLowerCase();
 
-        // میچنگ ترجیح: 1. ID کے ذریعے، 2. ٹائٹل کے ذریعے
         const priv = privateDict[pId] || privateDict[`title_${pTitle}`] || {};
 
-        // اصل ڈیلر نام
         const origName =
           priv['Original Dealer Name'] ||
           priv['original_dealer_name'] ||
@@ -95,7 +108,6 @@ export default function Properties() {
           p['Original Dealer Name'] ||
           '';
 
-        // اصل فون نمبر
         const origPhone =
           priv['Original Dealer Phone'] ||
           priv['original_dealer_phone'] ||
@@ -103,7 +115,6 @@ export default function Properties() {
           p['Original Dealer Phone'] ||
           '';
 
-        // پورا اصل میسج
         const fullMsg =
           priv['Full Description'] ||
           priv['full_description'] ||
@@ -127,11 +138,10 @@ export default function Properties() {
         };
       });
 
-      // تازہ ترین ریکارڈ سب سے اوپر
       mapped.sort((a, b) => Number(b.id) - Number(a.id));
       setProperties(mapped);
     } catch (err) {
-      console.error('Python-bridge matching error:', err);
+      console.error('Properties load error:', err);
     } finally {
       setLoading(false);
     }
@@ -141,8 +151,26 @@ export default function Properties() {
     loadData();
   }, [loadData]);
 
-  const societies = Array.from(new Set(properties.map((p) => p.society).filter(Boolean)));
+  // Statistics calculation
+  const totalCount = properties.length;
+  const societiesList = Array.from(new Set(properties.map((p) => p.society).filter(Boolean)));
+  const totalSocieties = societiesList.length;
 
+  const residentialCount = properties.filter((p) => {
+    const t = p.type.toLowerCase();
+    return t.includes('plot') || t.includes('house') || t.includes('residential') || t.includes('flat');
+  }).length;
+
+  const commercialCount = properties.filter((p) => {
+    const t = p.type.toLowerCase();
+    return t.includes('commercial') || t.includes('shop') || t.includes('plaza') || t.includes('office');
+  }).length;
+
+  const privateSyncedCount = properties.filter(
+    (p) => Boolean(p.original_dealer_name || p.original_dealer_phone)
+  ).length;
+
+  // Filter properties by search, society and tab
   const filtered = properties.filter((p) => {
     const q = search.toLowerCase();
     const matchesSearch =
@@ -155,7 +183,19 @@ export default function Properties() {
       (p.full_description && p.full_description.toLowerCase().includes(q));
 
     const matchesSociety = selectedSociety === 'all' || p.society === selectedSociety;
-    return matchesSearch && matchesSociety;
+
+    let matchesTab = true;
+    if (activeTab === 'residential') {
+      const t = p.type.toLowerCase();
+      matchesTab = t.includes('plot') || t.includes('house') || t.includes('residential') || t.includes('flat');
+    } else if (activeTab === 'commercial') {
+      const t = p.type.toLowerCase();
+      matchesTab = t.includes('commercial') || t.includes('shop') || t.includes('plaza') || t.includes('office');
+    } else if (activeTab === 'private_only') {
+      matchesTab = Boolean(p.original_dealer_name || p.original_dealer_phone);
+    }
+
+    return matchesSearch && matchesSociety && matchesTab;
   });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
@@ -164,7 +204,134 @@ export default function Properties() {
 
   return (
     <div className="space-y-6">
-      {/* Top Search & Filter Bar */}
+      {/* 4 Stat Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Total Properties */}
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Properties</p>
+            <p className="mt-2 text-2xl font-bold text-slate-800 dark:text-slate-100">{totalCount}</p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
+            <Home className="h-5 w-5" />
+          </div>
+        </div>
+
+        {/* Residential Plots */}
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Residential Inventory</p>
+            <p className="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{residentialCount}</p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+            <Layers className="h-5 w-5" />
+          </div>
+        </div>
+
+        {/* Societies Covered */}
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Societies Covered</p>
+            <p className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">{totalSocieties}</p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500">
+            <Map className="h-5 w-5" />
+          </div>
+        </div>
+
+        {/* Private CRM Verified */}
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Private Records Synced</p>
+            <p className="mt-2 text-2xl font-bold text-purple-600 dark:text-purple-400">{privateSyncedCount}</p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-500/10 text-purple-500">
+            <Shield className="h-5 w-5" />
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs Navigation */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2 dark:border-slate-800">
+        <button
+          onClick={() => {
+            setActiveTab('all');
+            setCurrentPage(1);
+          }}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+            activeTab === 'all'
+              ? 'border-amber-500 text-amber-500'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+          }`}
+        >
+          <Layers className="h-4 w-4" /> All Inventory
+          <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
+            {totalCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('residential');
+            setCurrentPage(1);
+          }}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+            activeTab === 'residential'
+              ? 'border-amber-500 text-amber-500'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+          }`}
+        >
+          <Home className="h-4 w-4" /> Residential Plots
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+            {residentialCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('commercial');
+            setCurrentPage(1);
+          }}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+            activeTab === 'commercial'
+              ? 'border-amber-500 text-amber-500'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+          }`}
+        >
+          <Building className="h-4 w-4" /> Commercial Properties
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+            {commercialCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('private_only');
+            setCurrentPage(1);
+          }}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+            activeTab === 'private_only'
+              ? 'border-amber-500 text-amber-500'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+          }`}
+        >
+          <ShieldCheck className="h-4 w-4" /> Private CRM Verified
+          <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-xs text-purple-600 dark:text-purple-400">
+            {privateSyncedCount}
+          </span>
+        </button>
+
+        <a
+          href="https://bintahaassociates.github.io/bintaha-main/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto flex items-center gap-1.5 text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400"
+        >
+          <ExternalLink className="h-3.5 w-3.5" /> Web Portal
+        </a>
+      </div>
+
+      {/* Search & Society Filter Controls */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[240px]">
@@ -190,7 +357,7 @@ export default function Properties() {
             className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-amber-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
           >
             <option value="all">تمام سوسائٹیز (All Societies)</option>
-            {societies.map((soc) => (
+            {societiesList.map((soc) => (
               <option key={soc} value={soc}>
                 {soc}
               </option>
@@ -219,7 +386,7 @@ export default function Properties() {
                 <th className="px-4 py-3">Society</th>
                 <th className="px-4 py-3">Price</th>
                 <th className="px-4 py-3">Display Contact</th>
-                <th className="px-4 py-3 text-center">Private CRM</th>
+                <th className="px-4 py-3 text-center">Private CRM Data</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -227,7 +394,7 @@ export default function Properties() {
                 <tr>
                   <td colSpan={7} className="py-16 text-center">
                     <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-amber-500" />
-                    <p className="mt-2 text-xs text-slate-400">تمام 3,382 پراپرٹیز اور پرائیویٹ میسجز سنک ہو رہے ہیں...</p>
+                    <p className="mt-2 text-xs text-slate-400">تمام پراپرٹیز اور پرائیویٹ میسجز لوڈ ہو رہے ہیں...</p>
                   </td>
                 </tr>
               ) : paginated.length === 0 ? (
