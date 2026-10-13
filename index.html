@@ -2,30 +2,40 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/x-icon" href="/bintaha-crm/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#d4af37" />
-    <meta name="description" content="Bin Taha Associates CRM — manage properties, leads, bookings, staff activity, and your public website." />
+    <meta name="theme-color" content="#d97706" />
+    <meta name="description" content="Bin Taha Associates CRM — Private Executive Watchdog & Real Estate Management Portal" />
+    
+    <!-- PWA Web App Support -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="BTA CRM" />
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="apple-mobile-web-app-title" content="BinTaha CRM" />
+    
+    <!-- Manifest & App Icons -->
+    <link rel="manifest" href="/bintaha-crm/manifest.json" />
+    <link rel="apple-touch-icon" href="/bintaha-crm/icon-192.png" />
+    
     <title>Bin Taha Associates CRM</title>
+    
+    <!-- Branding Meta -->
     <meta property="og:title" content="Bin Taha Associates CRM" />
-    <meta property="og:description" content="Real Estate CRM for Bin Taha Associates" />
-    <meta property="og:image" content="https://bolt.new/static/og_default.png" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="https://bolt.new/static/og_default.png" />
+    <meta property="og:description" content="Executive CRM & Property Management System" />
+    <meta property="og:image" content="/bintaha-crm/icon-512.png" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Register Service Worker for Offline & Installable PWA -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
+          navigator.serviceWorker
+            .register('/bintaha-crm/sw.js')
+            .then((reg) => console.log('Bin Taha CRM PWA Active:', reg.scope))
+            .catch((err) => console.error('PWA Worker Registration Failed:', err));
         });
       }
     </script>
