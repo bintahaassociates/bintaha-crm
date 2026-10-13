@@ -2,29 +2,37 @@
   "short_name": "BinTaha CRM",
   "name": "Bin Taha Associates CRM",
   "description": "Executive Real Estate CRM & Watchdog Portal",
-  "icons": [
-    {
-      "src": "/favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
-    },
-    {
-      "src": "/logo.png",
-      "type": "image/png",
-      "sizes": "192x192",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/logo.png",
-      "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "any maskable"
-    }
-  ],
-  "start_url": "/bintaha-crm/",
-  "scope": "/bintaha-crm/",
+  "id": "/bintaha-crm/",
+  "start_url": "https://bintahaassociates.github.io/bintaha-crm/",
+  "scope": "https://bintahaassociates.github.io/bintaha-crm/",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#d97706",
-  "background_color": "#0f172a"
+  "background_color": "#0f172a",
+  "icons": [
+    {
+      "src": "https://bintahaassociates.github.io/bintaha-crm/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "https://bintahaassociates.github.io/bintaha-crm/icon-192-maskable.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable"
+    },
+    {
+      "src": "https://bintahaassociates.github.io/bintaha-crm/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "https://bintahaassociates.github.io/bintaha-crm/icon-512-maskable.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ]
 }
