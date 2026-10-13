@@ -1,27 +1,33 @@
-import { useState, useCallback } from 'react';
-import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Phone, UserCircle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Phone, UserCircle, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useSyncTrigger } from '@/lib/sync';
-import type { Dealer } from '@/lib/types';
-import { mockDealers } from '@/lib/mockData';
 import Modal from '@/components/Modal';
 
-const ITEMS_PER_PAGE = 20;
+interface DealerItem {
+  id: string | number;
+  sr_no: string;
+  client_name: string;
+  mobile_number: string;
+  category: string;
+  status: string;
+}
+
+const ITEMS_PER_PAGE = 25;
 
 const emptyForm = {
   client_name: '',
   mobile_number: '',
-  category: 'general',
-  status: 'active',
+  category: 'Dealer',
+  status: 'Active',
 };
 
 export default function Dealers() {
-  const [dealers, setDealers] = useState<Dealer[]>(mockDealers || []);
-  const [loading, setLoading] = useState(false);
+  const [dealers, setDealers] = useState<DealerItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [modalOpen, setModalOpen] = useState(false);
-  const [editDealer, setEditDealer] = useState<Dealer | null>(null);
+  const [editDealer, setEditDealer] = useState<DealerItem | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -29,37 +35,35 @@ export default function Dealers() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      // سپابیس میں ٹیبل کا اصل نام "Dealers" ہے
       const { data, error } = await supabase
-        .from('dealers')
+        .from('Dealers')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
+        .order('id', { ascending: false });
 
       if (error) {
-        console.error('Supabase query error:', error);
-      } else if (data && data.length > 0) {
-        // Safe mapping in case fields differ
-        const sanitized: Dealer[] = data.map((item: any) => ({
-          ...item,
-          id: item?.id || String(Math.random()),
-          client_name: item?.client_name || item?.name || item?.title || 'Unknown Dealer',
-          mobile_number: item?.mobile_number || item?.phone || item?.contact || '-',
-          category: item?.category || 'general',
-          status: item?.status || 'active',
+        console.error('Supabase load error:', error);
+      } else if (data) {
+        const mapped: DealerItem[] = data.map((d: any, index: number) => ({
+          id: d.id,
+          sr_no: d['Sr No'] || String(index + 1),
+          client_name: d['Client Name'] || d.client_name || 'N/A',
+          mobile_number: d['Mobile Number'] || d.mobile_number || '-',
+          category: d['Category'] || d.category || 'Dealer',
+          status: d['Status'] || d.status || 'Active',
         }));
-        setDealers(sanitized);
+        setDealers(mapped);
       }
     } catch (err) {
-      console.error('Failed to load dealers data:', err);
+      console.error('Failed to fetch dealers:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  function reloadData() {
+  useEffect(() => {
     loadData();
-  }
-  useSyncTrigger(loadData);
+  }, [loadData]);
 
   function openAdd() {
     setEditDealer(null);
@@ -67,13 +71,13 @@ export default function Dealers() {
     setModalOpen(true);
   }
 
-  function openEdit(d: Dealer) {
+  function openEdit(d: DealerItem) {
     setEditDealer(d);
     setForm({
-      client_name: d?.client_name || '',
-      mobile_number: d?.mobile_number || '',
-      category: d?.category || 'general',
-      status: d?.status || 'active',
+      client_name: d.client_name,
+      mobile_number: d.mobile_number,
+      category: d.category,
+      status: d.status,
     });
     setModalOpen(true);
   }
@@ -81,60 +85,49 @@ export default function Dealers() {
   async function handleSave() {
     setSaving(true);
     try {
-      const payload = {
-        client_name: form.client_name,
-        mobile_number: form.mobile_number,
-        category: form.category,
-        status: form.status,
+      const payload: any = {
+        'Client Name': form.client_name,
+        'Mobile Number': form.mobile_number,
+        'Category': form.category,
+        'Status': form.status,
       };
+
       if (editDealer?.id) {
-        await supabase.from('dealers').update(payload).eq('id', editDealer.id);
+        await supabase.from('Dealers').update(payload).eq('id', editDealer.id);
       } else {
-        await supabase.from('dealers').insert(payload);
+        await supabase.from('Dealers').insert([payload]);
       }
     } catch (err) {
       console.error('Failed to save dealer:', err);
     } finally {
       setSaving(false);
       setModalOpen(false);
-      reloadData();
+      loadData();
     }
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(id: string | number) {
+    if (!confirm('کیا آپ اس ڈیلر کو حذف کرنا چاہتے ہیں؟')) return;
     try {
-      await supabase.from('dealers').delete().eq('id', id);
+      await supabase.from('Dealers').delete().eq('id', id);
     } catch (err) {
       console.error('Failed to delete dealer:', err);
     }
-    reloadData();
+    loadData();
   }
 
-  const safeDealers = Array.isArray(dealers) ? dealers : [];
-
-  const filtered = safeDealers.filter((d) => {
-    if (!d) return false;
-    const q = (search || '').toLowerCase();
-    const name = String(d?.client_name || '').toLowerCase();
-    const mobile = String(d?.mobile_number || '').toLowerCase();
-    const status = String(d?.status || '').toLowerCase();
-
+  const filtered = dealers.filter((d) => {
+    const q = search.toLowerCase();
+    const name = (d.client_name || '').toLowerCase();
+    const mobile = (d.mobile_number || '').toLowerCase();
     const matchesSearch = name.includes(q) || mobile.includes(q);
-    const matchesStatus = filterStatus === 'all' || status === filterStatus.toLowerCase();
+    const matchesStatus = filterStatus === 'all' || d.status.toLowerCase() === filterStatus.toLowerCase();
     return matchesSearch && matchesStatus;
   });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
   const paginated = filtered.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
-
-  if (loading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-amber-500" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -145,7 +138,7 @@ export default function Dealers() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search by name or mobile..."
+              placeholder="Search by client name or mobile..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -162,21 +155,28 @@ export default function Dealers() {
             }}
             className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-amber-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
           >
-            <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
+            <option value="all">تمام اسٹیٹس</option>
+            <option value="Active">ایکٹو (Active)</option>
+            <option value="Inactive">نان ایکٹو (Inactive)</option>
           </select>
+          <button
+            onClick={loadData}
+            title="Reload Data"
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
         <button
           onClick={openAdd}
           className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-amber-500/20 transition-all hover:shadow-xl hover:-translate-y-0.5"
         >
-          <Plus className="h-4 w-4" /> Add Dealer
+          <Plus className="h-4 w-4" /> نیا ڈیلر شامل کریں
         </button>
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/50">
@@ -190,76 +190,83 @@ export default function Dealers() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {paginated.map((d, idx) => {
-                const rowNum = (safePage - 1) * ITEMS_PER_PAGE + idx + 1;
-                return (
-                  <tr key={d?.id || idx} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-4 py-3 text-xs font-mono text-slate-400">{rowNum}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-                          <UserCircle className="h-5 w-5 text-slate-400" />
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="py-16 text-center">
+                    <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-amber-500" />
+                    <p className="mt-2 text-xs text-slate-400">سپابیس ڈیٹا لوڈ ہو رہا ہے...</p>
+                  </td>
+                </tr>
+              ) : paginated.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-16 text-center text-sm text-slate-400">
+                    کوئی ریکارڈ نہیں ملا۔
+                  </td>
+                </tr>
+              ) : (
+                paginated.map((d, idx) => {
+                  const rowNum = (safePage - 1) * ITEMS_PER_PAGE + idx + 1;
+                  return (
+                    <tr key={d.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-4 py-3 text-xs font-mono text-slate-400">{d.sr_no || rowNum}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                            <UserCircle className="h-5 w-5 text-slate-400" />
+                          </div>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">{d.client_name}</span>
                         </div>
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">
-                          {d?.client_name || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300">
+                          <Phone className="h-3 w-3 text-slate-400" /> {d.mobile_number}
                         </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300">
-                        <Phone className="h-3 w-3 text-slate-400" /> {d?.mobile_number || 'N/A'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                        {d?.category || 'general'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                          d?.status === 'active'
-                            ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
-                            : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-                        }`}
-                      >
-                        {d?.status || 'inactive'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => openEdit(d)}
-                          className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-amber-600 dark:hover:bg-slate-800"
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                          {d.category}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                            d.status.toLowerCase() === 'active'
+                              ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                              : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                          }`}
                         >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => d?.id && handleDelete(d.id)}
-                          className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                          {d.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => openEdit(d)}
+                            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-amber-600 dark:hover:bg-slate-800"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(d.id)}
+                            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
-
-        {paginated.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-sm text-slate-400">No dealers match your filters</p>
-          </div>
-        )}
 
         {/* Pagination */}
         {filtered.length > 0 && (
           <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 dark:border-slate-800">
             <p className="text-xs text-slate-400">
-              Showing {(safePage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(safePage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length}
+              کل {filtered.length} ڈیلرز | دکھائے جا رہے ہیں {(safePage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(safePage * ITEMS_PER_PAGE, filtered.length)}
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -288,80 +295,67 @@ export default function Dealers() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editDealer ? 'Edit Dealer' : 'Add New Dealer'}
+        title={editDealer ? 'ڈیلر میں ترمیم کریں' : 'نیا ڈیلر شامل کریں'}
         footer={
           <>
             <button
               onClick={() => setModalOpen(false)}
               className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300"
             >
-              Cancel
+              کینسل
             </button>
             <button
               onClick={handleSave}
               disabled={saving}
               className="rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2 text-sm font-semibold text-white shadow-lg disabled:opacity-50"
             >
-              {saving ? 'Saving...' : editDealer ? 'Update' : 'Add Dealer'}
+              {saving ? 'محفوظ ہو رہا ہے...' : editDealer ? 'اپ ڈیٹ کریں' : 'شامل کریں'}
             </button>
           </>
         }
       >
         <div className="space-y-4">
-          <FormField label="Client Name">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-600 dark:text-slate-400">Client Name</label>
             <input
               value={form.client_name}
               onChange={(e) => setForm({ ...form, client_name: e.target.value })}
-              className={inputClass}
-              placeholder="Imran Qureshi"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-amber-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+              placeholder="مثال: 1036 D Oner"
             />
-          </FormField>
-          <FormField label="Mobile Number">
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-600 dark:text-slate-400">Mobile Number</label>
             <input
               value={form.mobile_number}
               onChange={(e) => setForm({ ...form, mobile_number: e.target.value })}
-              className={inputClass}
-              placeholder="+92 321 4444444"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-amber-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+              placeholder="03218261789"
             />
-          </FormField>
+          </div>
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Category">
-              <select
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-600 dark:text-slate-400">Category</label>
+              <input
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
-                className={inputClass}
-              >
-                <option value="general">General</option>
-                <option value="Residential">Residential</option>
-                <option value="Commercial">Commercial</option>
-                <option value="Plots">Plots</option>
-              </select>
-            </FormField>
-            <FormField label="Status">
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-amber-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-600 dark:text-slate-400">Status</label>
               <select
                 value={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.value })}
-                className={inputClass}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-amber-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
               >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
               </select>
-            </FormField>
+            </div>
           </div>
         </div>
       </Modal>
-    </div>
-  );
-}
-
-const inputClass =
-  'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300';
-
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="mb-1.5 block text-sm font-medium text-slate-600 dark:text-slate-400">{label}</label>
-      {children}
     </div>
   );
 }
